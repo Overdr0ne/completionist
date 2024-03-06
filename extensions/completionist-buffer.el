@@ -1,4 +1,4 @@
-;;; vertico-buffer.el --- Display Vertico in a buffer instead of the minibuffer -*- lexical-binding: t -*-
+;;; completionist-buffer.el --- Display Vertico in a buffer instead of the minibuffer -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,8 +6,8 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (vertico "0.28"))
-;; Homepage: https://github.com/minad/vertico
+;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
 
@@ -28,30 +28,30 @@
 
 ;; This package is a Vertico extension, which displays Vertico in a
 ;; buffer instead of the minibuffer. The buffer display can be enabled
-;; by the `vertico-buffer-mode'.
+;; by the `completionist-buffer-mode'.
 
 ;;; Code:
 
-(require 'vertico)
+(require 'completionist)
 
-(defcustom vertico-buffer-hide-prompt t
+(defcustom completionist-buffer-hide-prompt t
   "Hide prompt in the minibuffer."
-  :group 'vertico
+  :group 'completionist
   :type 'boolean)
 
-(defcustom vertico-buffer-display-action
+(defcustom completionist-buffer-display-action
   '(display-buffer-reuse-window)
   "Display action for the Vertico buffer."
-  :group 'vertico
+  :group 'completionist
   :type `(choice
           (const :tag "Reuse some window"
                  (display-buffer-reuse-window))
           (const :tag "Below target buffer"
                  (display-buffer-below-selected
-                  (window-height . ,(+ 3 vertico-count))))
+                  (window-height . ,(+ 3 completionist-count))))
           (const :tag "Bottom of frame"
                  (display-buffer-at-bottom
-                  (window-height . ,(+ 3 vertico-count))))
+                  (window-height . ,(+ 3 completionist-count))))
           (const :tag "Side window on the right"
                  (display-buffer-in-side-window
                   (side . right)
@@ -62,15 +62,15 @@
                   (window-width . 0.3)))
           (const :tag "Side window at the top"
                  (display-buffer-in-side-window
-                  (window-height . ,(+ 3 vertico-count))
+                  (window-height . ,(+ 3 completionist-count))
                   (side . top)))
           (const :tag "Side window at the bottom"
                  (display-buffer-in-side-window
-                  (window-height . ,(+ 3 vertico-count))
+                  (window-height . ,(+ 3 completionist-count))
                   (side . bottom)))
           (sexp :tag "Other")))
 
-(defun vertico-buffer--redisplay (win)
+(defun completionist-buffer--redisplay (win)
   "Redisplay window WIN."
   (when-let (mbwin (active-minibuffer-window))
     (when (eq (window-buffer mbwin) (current-buffer))
@@ -83,26 +83,26 @@
         (setq-local truncate-lines (< (window-point win)
                                       (* 0.8 (window-width win))))
         (set-window-point win (point)))
-      (when vertico-buffer-hide-prompt
+      (when completionist-buffer-hide-prompt
         (window-resize mbwin (- (window-pixel-height mbwin)) nil nil 'pixelwise)
         (set-window-vscroll mbwin 100)))))
 
-(defun vertico-buffer--setup ()
+(defun completionist-buffer--setup ()
   "Setup buffer display."
-  (add-hook 'pre-redisplay-functions 'vertico-buffer--redisplay nil 'local)
-  (let* ((action vertico-buffer-display-action) tmp win
+  (add-hook 'pre-redisplay-functions 'completionist-buffer--redisplay nil 'local)
+  (let* ((action completionist-buffer-display-action) tmp win
          (_ (unwind-protect
                 (progn
-                  (setf tmp (generate-new-buffer "*vertico-buffer*")
+                  (setf tmp (generate-new-buffer "*completionist-buffer*")
                         ;; Set a fake major mode such that `display-buffer-reuse-mode-window'
                         ;; does not take over!
-                        (buffer-local-value 'major-mode tmp) 'vertico-buffer-mode
+                        (buffer-local-value 'major-mode tmp) 'completionist-buffer-mode
                         ;; Temporarily select the original window such
                         ;; that `display-buffer-same-window' works.
                         win (with-minibuffer-selected-window (display-buffer tmp action)))
                   (set-window-buffer win (current-buffer)))
               (kill-buffer tmp)))
-         (sym (make-symbol "vertico-buffer--destroy"))
+         (sym (make-symbol "completionist-buffer--destroy"))
          (depth (recursion-depth))
          (now (window-parameter win 'no-other-window))
          (ndow (window-parameter win 'no-delete-other-windows)))
@@ -112,7 +112,7 @@
                     (when (window-live-p win)
                       (set-window-parameter win 'no-other-window now)
                       (set-window-parameter win 'no-delete-other-windows ndow))
-                    (when vertico-buffer-hide-prompt
+                    (when completionist-buffer-hide-prompt
                       (set-window-vscroll nil 0))
                     (remove-hook 'minibuffer-exit-hook sym)))))
     ;; NOTE: We cannot use a buffer-local minibuffer-exit-hook here.
@@ -121,9 +121,9 @@
     (add-hook 'minibuffer-exit-hook sym)
     (set-window-parameter win 'no-other-window t)
     (set-window-parameter win 'no-delete-other-windows t)
-    (overlay-put vertico--candidates-ov 'window win)
-    (when (and vertico-buffer-hide-prompt vertico--count-ov)
-      (overlay-put vertico--count-ov 'window win))
+    (overlay-put completionist--candidates-ov 'window win)
+    (when (and completionist-buffer-hide-prompt completionist--count-ov)
+      (overlay-put completionist--count-ov 'window win))
     (setq-local show-trailing-whitespace nil
                 truncate-lines t
                 face-remapping-alist
@@ -139,20 +139,20 @@
                                        depth)
                                'face 'mode-line-buffer-id)))
                 cursor-in-non-selected-windows 'box
-                vertico-count (- (/ (window-pixel-height win)
+                completionist-count (- (/ (window-pixel-height win)
                                     (default-line-height)) 2))))
 
 ;;;###autoload
-(define-minor-mode vertico-buffer-mode
+(define-minor-mode completionist-buffer-mode
   "Display Vertico in a buffer instead of the minibuffer."
-  :global t :group 'vertico
+  :global t :group 'completionist
   (cond
-   (vertico-buffer-mode
-    (advice-add #'vertico--setup :after #'vertico-buffer--setup)
-    (advice-add #'vertico--resize-window :override #'ignore))
+   (completionist-buffer-mode
+    (advice-add #'completionist--setup :after #'completionist-buffer--setup)
+    (advice-add #'completionist--resize-window :override #'ignore))
    (t
-    (advice-remove #'vertico--setup #'vertico-buffer--setup)
-    (advice-remove #'vertico--resize-window #'ignore))))
+    (advice-remove #'completionist--setup #'completionist-buffer--setup)
+    (advice-remove #'completionist--resize-window #'ignore))))
 
-(provide 'vertico-buffer)
-;;; vertico-buffer.el ends here
+(provide 'completionist-buffer)
+;;; completionist-buffer.el ends here

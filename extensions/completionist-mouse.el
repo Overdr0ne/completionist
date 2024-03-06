@@ -1,4 +1,4 @@
-;;; vertico-mouse.el --- Mouse support for Vertico -*- lexical-binding: t -*-
+;;; completionist-mouse.el --- Mouse support for Vertico -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,8 +6,8 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (vertico "0.28"))
-;; Homepage: https://github.com/minad/vertico
+;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
 
@@ -30,66 +30,66 @@
 
 ;;; Code:
 
-(require 'vertico)
+(require 'completionist)
 
-(defface vertico-mouse
+(defface completionist-mouse
   '((t :inherit highlight))
   "Face used for mouse highlighting."
-  :group 'vertico-faces)
+  :group 'completionist-faces)
 
-(defun vertico-mouse--candidate-map (index)
+(defun completionist-mouse--candidate-map (index)
   "Return keymap for candidate with INDEX."
   (let ((map (make-sparse-keymap)))
     (define-key map [mouse-1] (lambda ()
                                 (interactive)
                                 (with-selected-window (active-minibuffer-window)
-                                  (let ((vertico--index index))
-                                    (vertico-exit)))))
+                                  (let ((completionist--index index))
+                                    (completionist-exit)))))
     (define-key map [mouse-3] (lambda ()
                                 (interactive)
                                 (with-selected-window (active-minibuffer-window)
-                                  (let ((vertico--index index))
-                                    (vertico-insert)))))
+                                  (let ((completionist--index index))
+                                    (completionist-insert)))))
     map))
 
-(defun vertico-mouse--format-candidate (orig cand prefix suffix index start)
-  "Format candidate, see `vertico--format-candidate' for arguments."
+(defun completionist-mouse--format-candidate (orig cand prefix suffix index start)
+  "Format candidate, see `completionist--format-candidate' for arguments."
   (setq cand (funcall orig cand prefix suffix index start))
   (when (equal suffix "")
     (setq cand (concat (substring cand 0 -1)
                        (propertize " " 'display '(space :align-to right))
                        "\n"))
-    (when (= index vertico--index)
-      (add-face-text-property 0 (length cand) 'vertico-current 'append cand)))
+    (when (= index completionist--index)
+      (add-face-text-property 0 (length cand) 'completionist-current 'append cand)))
   (add-text-properties 0 (1- (length cand))
-                       `(mouse-face vertico-mouse keymap ,(vertico-mouse--candidate-map index))
+                       `(mouse-face completionist-mouse keymap ,(completionist-mouse--candidate-map index))
                        cand)
   cand)
 
-(defun vertico-mouse--scroll-up (n)
+(defun completionist-mouse--scroll-up (n)
   "Scroll up by N lines."
-  (vertico--goto (max 0 (+ vertico--index n))))
+  (completionist--goto (max 0 (+ completionist--index n))))
 
-(defun vertico-mouse--scroll-down (n)
+(defun completionist-mouse--scroll-down (n)
   "Scroll down by N lines."
-  (vertico-mouse--scroll-up (- n)))
+  (completionist-mouse--scroll-up (- n)))
 
-(defun vertico-mouse--setup ()
+(defun completionist-mouse--setup ()
   "Setup mouse scrolling."
-  (setq-local mwheel-scroll-up-function #'vertico-mouse--scroll-up
-              mwheel-scroll-down-function #'vertico-mouse--scroll-down))
+  (setq-local mwheel-scroll-up-function #'completionist-mouse--scroll-up
+              mwheel-scroll-down-function #'completionist-mouse--scroll-down))
 
 ;;;###autoload
-(define-minor-mode vertico-mouse-mode
+(define-minor-mode completionist-mouse-mode
   "Mouse support for Vertico."
-  :global t :group 'vertico
+  :global t :group 'completionist
   (cond
-   (vertico-mouse-mode
-    (advice-add #'vertico--format-candidate :around #'vertico-mouse--format-candidate)
-    (advice-add #'vertico--setup :after #'vertico-mouse--setup))
+   (completionist-mouse-mode
+    (advice-add #'completionist--format-candidate :around #'completionist-mouse--format-candidate)
+    (advice-add #'completionist--setup :after #'completionist-mouse--setup))
    (t
-    (advice-remove #'vertico--format-candidate #'vertico-mouse--format-candidate)
-    (advice-remove #'vertico--setup #'vertico-mouse--setup))))
+    (advice-remove #'completionist--format-candidate #'completionist-mouse--format-candidate)
+    (advice-remove #'completionist--setup #'completionist-mouse--setup))))
 
-(provide 'vertico-mouse)
-;;; vertico-mouse.el ends here
+(provide 'completionist-mouse)
+;;; completionist-mouse.el ends here

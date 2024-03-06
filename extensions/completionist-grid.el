@@ -1,4 +1,4 @@
-;;; vertico-grid.el --- Grid display for Vertico -*- lexical-binding: t -*-
+;;; completionist-grid.el --- Grid display for Vertico -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,8 +6,8 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (vertico "0.28"))
-;; Homepage: https://github.com/minad/vertico
+;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
 
@@ -28,153 +28,153 @@
 
 ;; This package is a Vertico extension providing a grid display.
 ;;
-;; The mode can be enabled globally or via `vertico-multiform-mode' per
+;; The mode can be enabled globally or via `completionist-multiform-mode' per
 ;; command or completion category. Alternatively the grid display can be
-;; toggled temporarily if `vertico-multiform-mode' is enabled:
+;; toggled temporarily if `completionist-multiform-mode' is enabled:
 ;;
-;; (define-key vertico-map "\M-G" #'vertico-multiform-grid)
+;; (define-key completionist-map "\M-G" #'completionist-multiform-grid)
 
 ;;; Code:
 
-(require 'vertico)
+(require 'completionist)
 (eval-when-compile (require 'cl-lib))
 
-(defcustom vertico-grid-min-columns 2
+(defcustom completionist-grid-min-columns 2
   "Minimal number of grid columns."
   :type 'integer
-  :group 'vertico)
+  :group 'completionist)
 
-(defcustom vertico-grid-max-columns 8
+(defcustom completionist-grid-max-columns 8
   "Maximal number of grid columns."
   :type 'integer
-  :group 'vertico)
+  :group 'completionist)
 
-(defcustom vertico-grid-separator
+(defcustom completionist-grid-separator
   #("   |   " 3 4 (display (space :width (1)) face (:inherit shadow :inverse-video t)))
   "Separator between columns."
   :type 'string
-  :group 'vertico)
+  :group 'completionist)
 
-(defcustom vertico-grid-rows 6
+(defcustom completionist-grid-rows 6
   "Number of grid rows."
   :type 'integer
-  :group 'vertico)
+  :group 'completionist)
 
-(defcustom vertico-grid-lookahead 100
+(defcustom completionist-grid-lookahead 100
   "Number of candidates to lookahead for column number computation.
 When scrolling beyond this limit, candidates may be truncated."
   :type 'integer
-  :group 'vertico)
+  :group 'completionist)
 
-(defvar vertico-grid-map
+(defvar completionist-grid-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [remap left-char] #'vertico-grid-left)
-    (define-key map [remap right-char] #'vertico-grid-right)
-    (define-key map [remap scroll-down-command] #'vertico-grid-scroll-down)
-    (define-key map [remap scroll-up-command] #'vertico-grid-scroll-up)
+    (define-key map [remap left-char] #'completionist-grid-left)
+    (define-key map [remap right-char] #'completionist-grid-right)
+    (define-key map [remap scroll-down-command] #'completionist-grid-scroll-down)
+    (define-key map [remap scroll-up-command] #'completionist-grid-scroll-up)
     map)
   "Additional keymap activated in grid mode.")
 
-(defvar-local vertico-grid--columns vertico-grid-min-columns
+(defvar-local completionist-grid--columns completionist-grid-min-columns
   "Current number of grid columns.")
 
-(defun vertico-grid--arrange-candidates ()
+(defun completionist-grid--arrange-candidates ()
   "Arrange candidates."
-  (when (<= vertico--index 0)
-    (let ((cand vertico--candidates) (w 1) (n 0))
-      (while (and cand (< n vertico-grid-lookahead))
+  (when (<= completionist--index 0)
+    (let ((cand completionist--candidates) (w 1) (n 0))
+      (while (and cand (< n completionist-grid-lookahead))
         (setq w (max w (length (car cand))) n (1+ n))
         (pop cand))
-      (setq vertico-grid--columns
-            (max vertico-grid-min-columns
-                 (min vertico-grid-max-columns
-                      (floor (vertico--window-width) (+ w (length vertico-grid-separator))))))))
-  (let* ((sep (length vertico-grid-separator))
-         (count (* vertico-count vertico-grid--columns))
-         (start (* count (floor (max 0 vertico--index) count)))
-         (width (- (/ (vertico--window-width) vertico-grid--columns) sep))
+      (setq completionist-grid--columns
+            (max completionist-grid-min-columns
+                 (min completionist-grid-max-columns
+                      (floor (completionist--window-width) (+ w (length completionist-grid-separator))))))))
+  (let* ((sep (length completionist-grid-separator))
+         (count (* completionist-count completionist-grid--columns))
+         (start (* count (floor (max 0 completionist--index) count)))
+         (width (- (/ (completionist--window-width) completionist-grid--columns) sep))
          (cands
           (seq-map-indexed (lambda (cand index)
                              (cl-incf index start)
                              (when (string-match-p "\n" cand)
-                               (setq cand (vertico--truncate-multiline cand width)))
+                               (setq cand (completionist--truncate-multiline cand width)))
                              (truncate-string-to-width
                               (string-trim
                                (replace-regexp-in-string
                                 "[ \t]+"
                                 (lambda (x) (apply #'propertize " " (text-properties-at 0 x)))
-                                (vertico--format-candidate cand "" "" index start)))
+                                (completionist--format-candidate cand "" "" index start)))
                               width))
-                           (funcall vertico--highlight
-                                    (seq-subseq vertico--candidates start
+                           (funcall completionist--highlight
+                                    (seq-subseq completionist--candidates start
                                                 (min (+ start count)
-                                                     vertico--total)))))
-         (width (make-vector vertico-grid--columns 0)))
-    (dotimes (col vertico-grid--columns)
-      (dotimes (row vertico-count)
+                                                     completionist--total)))))
+         (width (make-vector completionist-grid--columns 0)))
+    (dotimes (col completionist-grid--columns)
+      (dotimes (row completionist-count)
         (aset width col (max
                          (aref width col)
-                         (string-width (or (nth (+ row (* col vertico-count)) cands) ""))))))
-    (dotimes (col (1- vertico-grid--columns))
+                         (string-width (or (nth (+ row (* col completionist-count)) cands) ""))))))
+    (dotimes (col (1- completionist-grid--columns))
       (cl-incf (aref width (1+ col)) (+ (aref width col) sep)))
-    (cl-loop for row from 0 to (1- (min vertico-count vertico--total)) collect
+    (cl-loop for row from 0 to (1- (min completionist-count completionist--total)) collect
              (let ((line (list "\n")))
-               (cl-loop for col from (1- vertico-grid--columns) downto 0 do
-                        (when-let (cand (nth (+ row (* col vertico-count)) cands))
+               (cl-loop for col from (1- completionist-grid--columns) downto 0 do
+                        (when-let (cand (nth (+ row (* col completionist-count)) cands))
                           (push cand line)
                           (when (> col 0)
-                            (push vertico-grid-separator line)
+                            (push completionist-grid-separator line)
                             (push (propertize " " 'display
                                               `(space :align-to (+ left ,(aref width (1- col))))) line))))
              (string-join line)))))
 
-(defun vertico-grid-left (&optional n)
+(defun completionist-grid-left (&optional n)
   "Move N columns to the left in the grid."
   (interactive "p")
-  (vertico-grid-right (- (or n 1))))
+  (completionist-grid-right (- (or n 1))))
 
-(defun vertico-grid-right (&optional n)
+(defun completionist-grid-right (&optional n)
   "Move N columns to the right in the grid."
   (interactive "p")
-  (let* ((page (* vertico-count vertico-grid--columns))
-         (x1 (/ (% vertico--index page) vertico-count))
-         (cols (min (1- vertico-grid--columns)
-                    (+ x1 (/ (- vertico--total vertico--index 1) vertico-count))))
-         (x2 (if vertico-cycle
+  (let* ((page (* completionist-count completionist-grid--columns))
+         (x1 (/ (% completionist--index page) completionist-count))
+         (cols (min (1- completionist-grid--columns)
+                    (+ x1 (/ (- completionist--total completionist--index 1) completionist-count))))
+         (x2 (if completionist-cycle
                  (mod (+ x1 (or n 1)) (1+ cols))
                (min cols (max 0 (+ x1 (or n 1)))))))
-    (vertico--goto (+ vertico--index (* vertico-count (- x2 x1))))))
+    (completionist--goto (+ completionist--index (* completionist-count (- x2 x1))))))
 
-(defun vertico-grid-scroll-down (&optional n)
+(defun completionist-grid-scroll-down (&optional n)
   "Go back by N pages."
   (interactive "p")
-  (vertico--goto (max 0 (- vertico--index (* (or n 1) vertico-grid--columns vertico-count)))))
+  (completionist--goto (max 0 (- completionist--index (* (or n 1) completionist-grid--columns completionist-count)))))
 
-(defun vertico-grid-scroll-up (&optional n)
+(defun completionist-grid-scroll-up (&optional n)
   "Go forward by N pages."
   (interactive "p")
-  (vertico-grid-scroll-down (- (or n 1))))
+  (completionist-grid-scroll-down (- (or n 1))))
 
 ;;;###autoload
-(define-minor-mode vertico-grid-mode
+(define-minor-mode completionist-grid-mode
   "Grid display for Vertico."
-  :global t :group 'vertico
+  :global t :group 'completionist
   ;; Shrink current minibuffer window
   (when-let (win (active-minibuffer-window))
     (unless (frame-root-window-p win)
       (window-resize win (- (window-pixel-height win)) nil nil 'pixelwise)))
   (cond
-   (vertico-grid-mode
-    (add-to-list 'minor-mode-map-alist `(vertico--input . ,vertico-grid-map))
-    (advice-add #'vertico--arrange-candidates :override #'vertico-grid--arrange-candidates))
+   (completionist-grid-mode
+    (add-to-list 'minor-mode-map-alist `(completionist--input . ,completionist-grid-map))
+    (advice-add #'completionist--arrange-candidates :override #'completionist-grid--arrange-candidates))
    (t
-    (setq minor-mode-map-alist (delete `(vertico--input . ,vertico-grid-map) minor-mode-map-alist))
-    (advice-remove #'vertico--arrange-candidates #'vertico-grid--arrange-candidates))))
+    (setq minor-mode-map-alist (delete `(completionist--input . ,completionist-grid-map) minor-mode-map-alist))
+    (advice-remove #'completionist--arrange-candidates #'completionist-grid--arrange-candidates))))
 
 ;; Emacs 28: Do not show Vertico commands in M-X
-(dolist (sym '(vertico-grid-left vertico-grid-right
-               vertico-grid-scroll-up vertico-grid-scroll-down))
-  (put sym 'completion-predicate #'vertico--command-p))
+(dolist (sym '(completionist-grid-left completionist-grid-right
+               completionist-grid-scroll-up completionist-grid-scroll-down))
+  (put sym 'completion-predicate #'completionist--command-p))
 
-(provide 'vertico-grid)
-;;; vertico-grid.el ends here
+(provide 'completionist-grid)
+;;; completionist-grid.el ends here
