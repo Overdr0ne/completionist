@@ -1,4 +1,4 @@
-;;; completionist-mouse.el --- Mouse support for Vertico -*- lexical-binding: t -*-
+;;; completionist-mouse.el --- Mouse support for Completionist -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -26,7 +26,7 @@
 
 ;;; Commentary:
 
-;; This package is a Vertico extension, which adds mouse support.
+;; This package is a Completionist extension, which adds mouse support.
 
 ;;; Code:
 
@@ -42,9 +42,8 @@
   (let ((map (make-sparse-keymap)))
     (define-key map [mouse-1] (lambda ()
                                 (interactive)
-                                (with-selected-window (active-minibuffer-window)
-                                  (let ((completionist--index index))
-                                    (completionist-exit)))))
+                                (let ((completionist--index index))
+                                  (completionist-execute))))
     (define-key map [mouse-3] (lambda ()
                                 (interactive)
                                 (with-selected-window (active-minibuffer-window)
@@ -74,14 +73,14 @@
   "Scroll down by N lines."
   (completionist-mouse--scroll-up (- n)))
 
-(defun completionist-mouse--setup ()
+(defun completionist-mouse--setup (prompt collector handler)
   "Setup mouse scrolling."
   (setq-local mwheel-scroll-up-function #'completionist-mouse--scroll-up
               mwheel-scroll-down-function #'completionist-mouse--scroll-down))
 
 ;;;###autoload
 (define-minor-mode completionist-mouse-mode
-  "Mouse support for Vertico."
+  "Mouse support for Completionist."
   :global t :group 'completionist
   (cond
    (completionist-mouse-mode
