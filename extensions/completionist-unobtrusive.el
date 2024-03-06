@@ -1,4 +1,4 @@
-;;; vertico-unobtrusive.el --- Unobtrusive display for Vertico -*- lexical-binding: t -*-
+;;; completionist-unobtrusive.el --- Unobtrusive display for Vertico -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,8 +6,8 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (vertico "0.28"))
-;; Homepage: https://github.com/minad/vertico
+;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
 
@@ -28,48 +28,48 @@
 
 ;; This package is a Vertico extension providing a unobtrusive display.
 ;; The unobtrusive display only shows the topmost candidate and nothing
-;; else, it is a simple derivative of `vertico-flat-mode'.
+;; else, it is a simple derivative of `completionist-flat-mode'.
 ;;
-;; The mode can be enabled globally or via `vertico-multiform-mode' per
+;; The mode can be enabled globally or via `completionist-multiform-mode' per
 ;; command or completion category. Alternatively the unobtrusive display
-;; can be toggled temporarily if `vertico-multiform-mode' is enabled:
+;; can be toggled temporarily if `completionist-multiform-mode' is enabled:
 ;;
-;; (define-key vertico-map "\M-U" #'vertico-multiform-unobtrusive)
+;; (define-key completionist-map "\M-U" #'completionist-multiform-unobtrusive)
 
 ;;; Code:
 
-(require 'vertico-flat)
+(require 'completionist-flat)
 
-(defvar vertico-unobtrusive--orig-count nil)
-(defvar vertico-unobtrusive--orig-count-format nil)
+(defvar completionist-unobtrusive--orig-count nil)
+(defvar completionist-unobtrusive--orig-count-format nil)
 
 ;;;###autoload
-(define-minor-mode vertico-unobtrusive-mode
+(define-minor-mode completionist-unobtrusive-mode
   "Unobtrusive display for Vertico."
-  :global t :group 'vertico
+  :global t :group 'completionist
   (cond
-   (vertico-unobtrusive-mode
-    (unless vertico-unobtrusive--orig-count
-      (push '(vertico-current . default) (default-value 'face-remapping-alist))
-      (setq vertico-unobtrusive--orig-count vertico-count
-            vertico-unobtrusive--orig-count-format vertico-count-format
-            vertico-count 1
-            vertico-count-format nil
-            vertico-flat-format `(:separator nil :ellipsis nil ,@vertico-flat-format)))
-    (advice-add #'vertico--setup :before #'redisplay)
-    (vertico-flat-mode 1))
+   (completionist-unobtrusive-mode
+    (unless completionist-unobtrusive--orig-count
+      (push '(completionist-current . default) (default-value 'face-remapping-alist))
+      (setq completionist-unobtrusive--orig-count completionist-count
+            completionist-unobtrusive--orig-count-format completionist-count-format
+            completionist-count 1
+            completionist-count-format nil
+            completionist-flat-format `(:separator nil :ellipsis nil ,@completionist-flat-format)))
+    (advice-add #'completionist--setup :before #'redisplay)
+    (completionist-flat-mode 1))
    (t
-    (when vertico-unobtrusive--orig-count
+    (when completionist-unobtrusive--orig-count
       (setq-default face-remapping-alist
-                    (remove '(vertico-current . default)
+                    (remove '(completionist-current . default)
                             (default-value 'face-remapping-alist)))
-      (setq vertico-count vertico-unobtrusive--orig-count
-            vertico-count-format vertico-unobtrusive--orig-count-format
-            vertico-flat-format (nthcdr 4 vertico-flat-format)
-            vertico-unobtrusive--orig-count nil))
-    (advice-remove #'vertico--setup #'redisplay)
-    (vertico-flat-mode -1)))
-  (setq vertico-flat-mode nil))
+      (setq completionist-count completionist-unobtrusive--orig-count
+            completionist-count-format completionist-unobtrusive--orig-count-format
+            completionist-flat-format (nthcdr 4 completionist-flat-format)
+            completionist-unobtrusive--orig-count nil))
+    (advice-remove #'completionist--setup #'redisplay)
+    (completionist-flat-mode -1)))
+  (setq completionist-flat-mode nil))
 
-(provide 'vertico-unobtrusive)
-;;; vertico-unobtrusive.el ends here
+(provide 'completionist-unobtrusive)
+;;; completionist-unobtrusive.el ends here

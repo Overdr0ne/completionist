@@ -1,4 +1,4 @@
-;;; vertico-indexed.el --- Select indexed candidates -*- lexical-binding: t -*-
+;;; completionist-indexed.el --- Select indexed candidates -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,8 +6,8 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (vertico "0.28"))
-;; Homepage: https://github.com/minad/vertico
+;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
 
@@ -27,67 +27,67 @@
 ;;; Commentary:
 
 ;; This package is a Vertico extension, which prefixes candidates with indices
-;; if enabled via `vertico-indexed-mode'. It allows you to select candidates
+;; if enabled via `completionist-indexed-mode'. It allows you to select candidates
 ;; with prefix arguments. This is designed to be a faster alternative to
-;; selecting a candidate with `vertico-next' and `vertico-previous'.
+;; selecting a candidate with `completionist-next' and `completionist-previous'.
 
 ;;; Code:
 
-(require 'vertico)
+(require 'completionist)
 
-(defface vertico-indexed
+(defface completionist-indexed
   '((t :height 0.75 :inherit font-lock-comment-face))
   "Face used for the candidate index prefix."
-  :group 'vertico-faces)
+  :group 'completionist-faces)
 
-(defcustom vertico-indexed-start 0
+(defcustom completionist-indexed-start 0
   "Start of the indexing."
-  :group 'vertico
+  :group 'completionist
   :type 'integer)
 
-(defvar vertico-indexed--commands
-  '(vertico-insert vertico-exit vertico-directory-enter))
-(defvar-local vertico-indexed--min 0)
-(defvar-local vertico-indexed--max 0)
+(defvar completionist-indexed--commands
+  '(completionist-insert completionist-exit completionist-directory-enter))
+(defvar-local completionist-indexed--min 0)
+(defvar-local completionist-indexed--max 0)
 
-(defun vertico-indexed--format-candidate (orig cand prefix suffix index start)
-  "Format candidate, see `vertico--format-candidate' for arguments."
-  (setq vertico-indexed--min start vertico-indexed--max index)
+(defun completionist-indexed--format-candidate (orig cand prefix suffix index start)
+  "Format candidate, see `completionist--format-candidate' for arguments."
+  (setq completionist-indexed--min start completionist-indexed--max index)
   (funcall orig cand
            (concat (propertize (format
-                                (if (> (+ vertico-indexed-start vertico-count) 10)
+                                (if (> (+ completionist-indexed-start completionist-count) 10)
                                     "%2d " "%1d ")
-                                (+ (- index start) vertico-indexed-start))
-                               'face 'vertico-indexed)
+                                (+ (- index start) completionist-indexed-start))
+                               'face 'completionist-indexed)
                    prefix)
            suffix index start))
 
-(defun vertico-indexed--handle-prefix (orig &rest args)
+(defun completionist-indexed--handle-prefix (orig &rest args)
   "Handle prefix argument before calling ORIG function with ARGS."
   (if (and current-prefix-arg (called-interactively-p t))
-      (let ((vertico--index (+ vertico-indexed--min
+      (let ((completionist--index (+ completionist-indexed--min
                                (- (prefix-numeric-value current-prefix-arg)
-                                  vertico-indexed-start))))
-        (if (or (< vertico--index vertico-indexed--min)
-                (> vertico--index vertico-indexed--max)
-                (= vertico--total 0))
+                                  completionist-indexed-start))))
+        (if (or (< completionist--index completionist-indexed--min)
+                (> completionist--index completionist-indexed--max)
+                (= completionist--total 0))
             (minibuffer-message "Out of range")
           (funcall orig)))
     (apply orig args)))
 
 ;;;###autoload
-(define-minor-mode vertico-indexed-mode
+(define-minor-mode completionist-indexed-mode
   "Prefix candidates with indices."
-  :global t :group 'vertico
+  :global t :group 'completionist
   (cond
-   (vertico-indexed-mode
-    (advice-add #'vertico--format-candidate :around #'vertico-indexed--format-candidate)
-    (dolist (cmd vertico-indexed--commands)
-      (advice-add cmd :around #'vertico-indexed--handle-prefix)))
+   (completionist-indexed-mode
+    (advice-add #'completionist--format-candidate :around #'completionist-indexed--format-candidate)
+    (dolist (cmd completionist-indexed--commands)
+      (advice-add cmd :around #'completionist-indexed--handle-prefix)))
    (t
-    (advice-remove #'vertico--format-candidate #'vertico-indexed--format-candidate)
-    (dolist (cmd vertico-indexed--commands)
-      (advice-remove cmd #'vertico-indexed--handle-prefix)))))
+    (advice-remove #'completionist--format-candidate #'completionist-indexed--format-candidate)
+    (dolist (cmd completionist-indexed--commands)
+      (advice-remove cmd #'completionist-indexed--handle-prefix)))))
 
-(provide 'vertico-indexed)
-;;; vertico-indexed.el ends here
+(provide 'completionist-indexed)
+;;; completionist-indexed.el ends here

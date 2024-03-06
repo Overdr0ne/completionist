@@ -1,4 +1,4 @@
-;;; vertico-directory.el --- Ido-like directory navigation for Vertico -*- lexical-binding: t -*-
+;;; completionist-directory.el --- Ido-like directory navigation for Vertico -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,8 +6,8 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (vertico "0.28"))
-;; Homepage: https://github.com/minad/vertico
+;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
 
@@ -28,40 +28,40 @@
 
 ;; This package is a Vertico extension, which provides Ido-like
 ;; directory navigation commands. The commands can be bound in the
-;; `vertico-map'. Furthermore a cleanup function for shadowed file paths
+;; `completionist-map'. Furthermore a cleanup function for shadowed file paths
 ;; is provided.
 ;;
-;; (define-key vertico-map "\r" #'vertico-directory-enter)
-;; (define-key vertico-map "\d" #'vertico-directory-delete-char)
-;; (define-key vertico-map "\M-\d" #'vertico-directory-delete-word)
-;; (add-hook 'rfn-eshadow-update-overlay-hook #'vertico-directory-tidy)
+;; (define-key completionist-map "\r" #'completionist-directory-enter)
+;; (define-key completionist-map "\d" #'completionist-directory-delete-char)
+;; (define-key completionist-map "\M-\d" #'completionist-directory-delete-word)
+;; (add-hook 'rfn-eshadow-update-overlay-hook #'completionist-directory-tidy)
 
 ;;; Code:
 
-(require 'vertico)
+(require 'completionist)
 
 ;;;###autoload
-(defun vertico-directory-enter ()
+(defun completionist-directory-enter ()
   "Enter directory or exit completion with current candidate."
   (interactive)
-  (if (and (>= vertico--index 0)
-           (let ((cand (vertico--candidate)))
+  (if (and (>= completionist--index 0)
+           (let ((cand (completionist--candidate)))
              (or (string-suffix-p "/" cand)
-                 (and (vertico--remote-p cand)
+                 (and (completionist--remote-p cand)
                       (string-suffix-p ":" cand))))
-           ;; Check vertico--base for stepwise file path completion
-           (not (equal vertico--base ""))
-           (eq 'file (vertico--metadata-get 'category)))
-      (vertico-insert)
-    (vertico-exit)))
+           ;; Check completionist--base for stepwise file path completion
+           (not (equal completionist--base ""))
+           (eq 'file (completionist--metadata-get 'category)))
+      (completionist-insert)
+    (completionist-exit)))
 
 ;;;###autoload
-(defun vertico-directory-up (&optional n)
+(defun completionist-directory-up (&optional n)
   "Delete N directories before point."
   (interactive "p")
   (when (and (> (point) (minibuffer-prompt-end))
              (eq (char-before) ?/)
-             (eq 'file (vertico--metadata-get 'category)))
+             (eq 'file (completionist--metadata-get 'category)))
     (let ((path (buffer-substring (minibuffer-prompt-end) (point))) found)
       (when (string-match-p "\\`~[^/]*/\\'" path)
         (delete-minibuffer-contents)
@@ -75,23 +75,23 @@
               (setq found t))))))))
 
 ;;;###autoload
-(defun vertico-directory-delete-char (&optional n)
+(defun completionist-directory-delete-char (&optional n)
   "Delete N directories or chars before point."
   (interactive "p")
-  (unless (vertico-directory-up n)
+  (unless (completionist-directory-up n)
     (backward-delete-char n)))
 
 ;;;###autoload
-(defun vertico-directory-delete-word (&optional n)
+(defun completionist-directory-delete-word (&optional n)
   "Delete N directories or words before point."
   (interactive "p")
-  (unless (vertico-directory-up n)
+  (unless (completionist-directory-up n)
     (let ((pt (point)))
       (backward-word n)
       (delete-region pt (point)))))
 
 ;;;###autoload
-(defun vertico-directory-tidy ()
+(defun completionist-directory-tidy ()
   "Tidy shadowed file name, see `rfn-eshadow-overlay'."
   (when (eq this-command #'self-insert-command)
     (dolist (ov '(tramp-rfn-eshadow-overlay rfn-eshadow-overlay))
@@ -104,9 +104,9 @@
         (delete-region (overlay-start ov) (overlay-end ov))))))
 
 ;; Emacs 28: Do not show Vertico commands in M-X
-(dolist (sym '(vertico-directory-up vertico-directory-enter
-               vertico-directory-delete-char vertico-directory-delete-word))
-  (put sym 'completion-predicate #'vertico--command-p))
+(dolist (sym '(completionist-directory-up completionist-directory-enter
+               completionist-directory-delete-char completionist-directory-delete-word))
+  (put sym 'completion-predicate #'completionist--command-p))
 
-(provide 'vertico-directory)
-;;; vertico-directory.el ends here
+(provide 'completionist-directory)
+;;; completionist-directory.el ends here

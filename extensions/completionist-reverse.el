@@ -1,4 +1,4 @@
-;;; vertico-reverse.el --- Reverse the Vertico display -*- lexical-binding: t -*-
+;;; completionist-reverse.el --- Reverse the Vertico display -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,8 +6,8 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (vertico "0.28"))
-;; Homepage: https://github.com/minad/vertico
+;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
 
@@ -28,59 +28,59 @@
 
 ;; This package is a Vertico extension, which reverses the list of candidates.
 ;;
-;; The mode can be enabled globally or via `vertico-multiform-mode' per
+;; The mode can be enabled globally or via `completionist-multiform-mode' per
 ;; command or completion category. Alternatively the reverse display can be
-;; toggled temporarily if `vertico-multiform-mode' is enabled:
+;; toggled temporarily if `completionist-multiform-mode' is enabled:
 ;;
-;; (define-key vertico-map "\M-R" #'vertico-multiform-reverse)
+;; (define-key completionist-map "\M-R" #'completionist-multiform-reverse)
 
 ;;; Code:
 
-(require 'vertico)
+(require 'completionist)
 
-(defvar vertico-reverse-map
+(defvar completionist-reverse-map
   (let ((map (make-sparse-keymap)))
-    (define-key map [remap beginning-of-buffer] #'vertico-last)
-    (define-key map [remap minibuffer-beginning-of-buffer] #'vertico-last)
-    (define-key map [remap end-of-buffer] #'vertico-first)
-    (define-key map [remap scroll-down-command] #'vertico-scroll-up)
-    (define-key map [remap scroll-up-command] #'vertico-scroll-down)
-    (define-key map [remap next-line] #'vertico-previous)
-    (define-key map [remap previous-line] #'vertico-next)
-    (define-key map [remap next-line-or-history-element] #'vertico-previous)
-    (define-key map [remap previous-line-or-history-element] #'vertico-next)
-    (define-key map [remap backward-paragraph] #'vertico-next-group)
-    (define-key map [remap forward-paragraph] #'vertico-previous-group)
+    (define-key map [remap beginning-of-buffer] #'completionist-last)
+    (define-key map [remap minibuffer-beginning-of-buffer] #'completionist-last)
+    (define-key map [remap end-of-buffer] #'completionist-first)
+    (define-key map [remap scroll-down-command] #'completionist-scroll-up)
+    (define-key map [remap scroll-up-command] #'completionist-scroll-down)
+    (define-key map [remap next-line] #'completionist-previous)
+    (define-key map [remap previous-line] #'completionist-next)
+    (define-key map [remap next-line-or-history-element] #'completionist-previous)
+    (define-key map [remap previous-line-or-history-element] #'completionist-next)
+    (define-key map [remap backward-paragraph] #'completionist-next-group)
+    (define-key map [remap forward-paragraph] #'completionist-previous-group)
     map)
   "Additional keymap activated in reverse mode.")
 
-(defun vertico-reverse--display-candidates (lines)
+(defun completionist-reverse--display-candidates (lines)
   "Display LINES in reverse."
-  (move-overlay vertico--candidates-ov (point-min) (point-min))
+  (move-overlay completionist--candidates-ov (point-min) (point-min))
   (setq lines (nreverse lines))
-  (unless (eq vertico-resize t)
-    (setq lines (nconc (make-list (max 0 (- vertico-count (length lines))) "\n") lines)))
+  (unless (eq completionist-resize t)
+    (setq lines (nconc (make-list (max 0 (- completionist-count (length lines))) "\n") lines)))
   (let ((string (apply #'concat lines)))
     (add-face-text-property 0 (length string) 'default 'append string)
-    (overlay-put vertico--candidates-ov 'before-string string)
-    (overlay-put vertico--candidates-ov 'after-string nil))
-  (vertico--resize-window (length lines)))
+    (overlay-put completionist--candidates-ov 'before-string string)
+    (overlay-put completionist--candidates-ov 'after-string nil))
+  (completionist--resize-window (length lines)))
 
 ;;;###autoload
-(define-minor-mode vertico-reverse-mode
+(define-minor-mode completionist-reverse-mode
   "Reverse the Vertico display."
-  :global t :group 'vertico
+  :global t :group 'completionist
   ;; Reset overlays
   (dolist (buf (buffer-list))
-    (when-let (ov (buffer-local-value 'vertico--candidates-ov buf))
+    (when-let (ov (buffer-local-value 'completionist--candidates-ov buf))
       (overlay-put ov 'before-string nil)))
   (cond
-   (vertico-reverse-mode
-    (add-to-list 'minor-mode-map-alist `(vertico--input . ,vertico-reverse-map))
-    (advice-add #'vertico--display-candidates :override #'vertico-reverse--display-candidates))
+   (completionist-reverse-mode
+    (add-to-list 'minor-mode-map-alist `(completionist--input . ,completionist-reverse-map))
+    (advice-add #'completionist--display-candidates :override #'completionist-reverse--display-candidates))
    (t
-    (setq minor-mode-map-alist (delete `(vertico--input . ,vertico-reverse-map) minor-mode-map-alist))
-    (advice-remove #'vertico--display-candidates #'vertico-reverse--display-candidates))))
+    (setq minor-mode-map-alist (delete `(completionist--input . ,completionist-reverse-map) minor-mode-map-alist))
+    (advice-remove #'completionist--display-candidates #'completionist-reverse--display-candidates))))
 
-(provide 'vertico-reverse)
-;;; vertico-reverse.el ends here
+(provide 'completionist-reverse)
+;;; completionist-reverse.el ends here

@@ -1,4 +1,4 @@
-;;; vertico-repeat.el --- Repeat Vertico sessions -*- lexical-binding: t -*-
+;;; completionist-repeat.el --- Repeat Vertico sessions -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,8 +6,8 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (vertico "0.28"))
-;; Homepage: https://github.com/minad/vertico
+;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
 
@@ -27,118 +27,118 @@
 ;;; Commentary:
 
 ;; This package is a Vertico extension, which enables repetition of
-;; Vertico sessions via the `vertico-repeat', `vertico-repeat-last' and
-;; `vertico-repeat-select' commands. If the repeat commands are called
+;; Vertico sessions via the `completionist-repeat', `completionist-repeat-last' and
+;; `completionist-repeat-select' commands. If the repeat commands are called
 ;; from an existing Vertico minibuffer session, only sessions
 ;; corresponding to the current minibuffer command are offered via
 ;; completion. It is necessary to register a minibuffer setup hook,
 ;; which saves the Vertico state for repetition. In order to save the
 ;; history across Emacs sessions, enable `savehist-mode' and add
-;; `vertico-repeat-history' to `savehist-additional-variables'.
+;; `completionist-repeat-history' to `savehist-additional-variables'.
 ;;
-;; (global-set-key "\M-R" #'vertico-repeat)
-;; (add-hook 'minibuffer-setup-hook #'vertico-repeat-save)
+;; (global-set-key "\M-R" #'completionist-repeat)
+;; (add-hook 'minibuffer-setup-hook #'completionist-repeat-save)
 
 ;;; Code:
 
-(require 'vertico)
+(require 'completionist)
 (eval-when-compile (require 'cl-lib))
 
-(defcustom vertico-repeat-filter
-  '(vertico-repeat
-    vertico-repeat-select
+(defcustom completionist-repeat-filter
+  '(completionist-repeat
+    completionist-repeat-select
     execute-extended-command
     execute-extended-command-for-buffer)
   "List of commands to filter out from the history."
   :type '(repeat symbol)
-  :group 'vertico)
+  :group 'completionist)
 
-(defcustom vertico-repeat-transformers
-  (list #'vertico-repeat--filter-empty
-        #'vertico-repeat--filter-commands)
+(defcustom completionist-repeat-transformers
+  (list #'completionist-repeat--filter-empty
+        #'completionist-repeat--filter-commands)
   "List of functions to apply to history element before saving."
   :type '(repeat function)
-  :group 'vertico)
+  :group 'completionist)
 
-(defvar vertico-repeat-history nil)
-(defvar-local vertico-repeat--command nil)
-(defvar-local vertico-repeat--input nil)
+(defvar completionist-repeat-history nil)
+(defvar-local completionist-repeat--command nil)
+(defvar-local completionist-repeat--input nil)
 
-(defun vertico-repeat--filter-commands (session)
-  "Filter SESSION if command is listed in `vertico-repeat-filter'."
-  (and (not (memq (car session) vertico-repeat-filter)) session))
+(defun completionist-repeat--filter-commands (session)
+  "Filter SESSION if command is listed in `completionist-repeat-filter'."
+  (and (not (memq (car session) completionist-repeat-filter)) session))
 
-(defun vertico-repeat--filter-empty (session)
+(defun completionist-repeat--filter-empty (session)
   "Filter SESSION if input is empty."
   (and (cadr session) (not (equal (cadr session) "")) session))
 
-(defun vertico-repeat--save-input ()
+(defun completionist-repeat--save-input ()
   "Save current minibuffer input."
-  (setq vertico-repeat--input (minibuffer-contents-no-properties)))
+  (setq completionist-repeat--input (minibuffer-contents-no-properties)))
 
-(defun vertico-repeat--save-exit ()
-  "Save command session in `vertico-repeat-history'."
-  (let ((session `(,vertico-repeat--command
-                   ,vertico-repeat--input
-                   ,@(and vertico--lock-candidate
-                          (>= vertico--index 0)
+(defun completionist-repeat--save-exit ()
+  "Save command session in `completionist-repeat-history'."
+  (let ((session `(,completionist-repeat--command
+                   ,completionist-repeat--input
+                   ,@(and completionist--lock-candidate
+                          (>= completionist--index 0)
                           (list (substring-no-properties
-                                 (nth vertico--index vertico--candidates))))))
-        (transform vertico-repeat-transformers))
+                                 (nth completionist--index completionist--candidates))))))
+        (transform completionist-repeat-transformers))
     (while (and transform (setq session (funcall (pop transform) session))))
     (when session
-      (add-to-history 'vertico-repeat-history session))))
+      (add-to-history 'completionist-repeat-history session))))
 
-(defun vertico-repeat--restore (session)
-  "Restore Vertico SESSION for `vertico-repeat'."
+(defun completionist-repeat--restore (session)
+  "Restore Vertico SESSION for `completionist-repeat'."
   (delete-minibuffer-contents)
   (insert (cadr session))
   (when (caddr session)
-    (vertico--update)
-    (when-let (idx (seq-position vertico--candidates (caddr session)))
-      (setq vertico--index idx
-            vertico--lock-candidate t)))
-  (vertico--exhibit))
+    (completionist--update)
+    (when-let (idx (seq-position completionist--candidates (caddr session)))
+      (setq completionist--index idx
+            completionist--lock-candidate t)))
+  (completionist--exhibit))
 
 ;;;###autoload
-(defun vertico-repeat-save ()
-  "Save Vertico session for `vertico-repeat'.
+(defun completionist-repeat-save ()
+  "Save Vertico session for `completionist-repeat'.
 This function must be registered as `minibuffer-setup-hook'."
-  (when (and vertico--input (symbolp this-command))
-    (setq vertico-repeat--command this-command)
-    (add-hook 'post-command-hook #'vertico-repeat--save-input nil 'local)
-    (add-hook 'minibuffer-exit-hook #'vertico-repeat--save-exit nil 'local)))
+  (when (and completionist--input (symbolp this-command))
+    (setq completionist-repeat--command this-command)
+    (add-hook 'post-command-hook #'completionist-repeat--save-input nil 'local)
+    (add-hook 'minibuffer-exit-hook #'completionist-repeat--save-exit nil 'local)))
 
 ;;;###autoload
-(defun vertico-repeat-last (&optional session)
+(defun completionist-repeat-last (&optional session)
   "Repeat last Vertico completion SESSION.
 If called interactively from an existing Vertico session,
-`vertico-repeat-last' will restore the last input and
+`completionist-repeat-last' will restore the last input and
 last selected candidate for the current command."
   (interactive
-   (list (or (if vertico-repeat--command
-                 (seq-find (lambda (x) (eq (car x) vertico-repeat--command))
-                           vertico-repeat-history)
-               (car vertico-repeat-history))
+   (list (or (if completionist-repeat--command
+                 (seq-find (lambda (x) (eq (car x) completionist-repeat--command))
+                           completionist-repeat-history)
+               (car completionist-repeat-history))
              (user-error "No repeatable Vertico session"))))
-  (if (and vertico-repeat--command (eq vertico-repeat--command (car session)))
-      (vertico-repeat--restore session)
+  (if (and completionist-repeat--command (eq completionist-repeat--command (car session)))
+      (completionist-repeat--restore session)
     (minibuffer-with-setup-hook
-        (apply-partially #'vertico-repeat--restore session)
+        (apply-partially #'completionist-repeat--restore session)
       (command-execute (setq this-command (car session))))))
 
 ;;;###autoload
-(defun vertico-repeat-select ()
+(defun completionist-repeat-select ()
   "Select a Vertico session from the session history and repeat it.
 If called from an existing Vertico session, you can select among
 previous sessions for the current command."
   (interactive)
-  (let* ((current-cmd vertico-repeat--command)
+  (let* ((current-cmd completionist-repeat--command)
          (trimmed
           (delete-dups
            (or
             (cl-loop
-             for session in vertico-repeat-history
+             for session in completionist-repeat-history
              if (or (not current-cmd) (eq (car session) current-cmd))
              collect
              (list
@@ -182,15 +182,15 @@ previous sessions for the current command."
                                     nil t nil t)
                                    formatted))
                        (user-error "No session selected"))))
-    (vertico-repeat-last selected)))
+    (completionist-repeat-last selected)))
 
 ;;;###autoload
-(defun vertico-repeat (&optional arg)
+(defun completionist-repeat (&optional arg)
   "Repeat last Vertico session.
 If prefix ARG is non-nil, offer completion menu to select from session history."
   (interactive "P")
   (call-interactively
-   (if arg #'vertico-repeat-select #'vertico-repeat-last)))
+   (if arg #'completionist-repeat-select #'completionist-repeat-last)))
 
-(provide 'vertico-repeat)
-;;; vertico-repeat.el ends here
+(provide 'completionist-repeat)
+;;; completionist-repeat.el ends here
