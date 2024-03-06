@@ -1,4 +1,4 @@
-;;; completionist-flat.el --- Flat, horizontal display for Vertico -*- lexical-binding: t -*-
+;;; completionist-flat.el --- Flat, horizontal display for Completionist -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -26,7 +26,7 @@
 
 ;;; Commentary:
 
-;; This package is a Vertico extension providing a horizontal display.
+;; This package is a Completionist extension providing a horizontal display.
 ;;
 ;; The mode can be enabled globally or via `completionist-multiform-mode' per
 ;; command or completion category. Alternatively the flat display can be
@@ -50,13 +50,13 @@
 (defcustom completionist-flat-format
   '(:multiple   #("{%s}" 0 1 (face minibuffer-prompt)
                   3 4 (face minibuffer-prompt))
-    :single     #("[%s]" 0 1 (face minibuffer-prompt)
-                  1 3 (face success) 3 4 (face minibuffer-prompt))
-    :prompt     #("(%s)" 0 1 (face minibuffer-prompt)
-                  3 4 (face minibuffer-prompt))
-    :separator  #(" | " 0 3 (face minibuffer-prompt))
-    :ellipsis   #("…" 0 1 (face minibuffer-prompt))
-    :no-match   "[No match]")
+                :single     #("[%s]" 0 1 (face minibuffer-prompt)
+                              1 3 (face success) 3 4 (face minibuffer-prompt))
+                :prompt     #("(%s)" 0 1 (face minibuffer-prompt)
+                              3 4 (face minibuffer-prompt))
+                :separator  #(" | " 0 3 (face minibuffer-prompt))
+                :ellipsis   #("…" 0 1 (face minibuffer-prompt))
+                :no-match   "[No match]")
   "Formatting strings."
   :type 'plist
   :group 'completionist)
@@ -74,7 +74,7 @@
               resize-mini-windows t)
   (move-overlay completionist--candidates-ov (point-max) (point-max))
   (overlay-put
-   completionist--candidates-ov 'after-string
+   completionist--candidates-ov 'before-string
    (concat #(" " 0 1 (cursor t))
            (cond
             ((and (not candidates) (plist-get completionist-flat-format :no-match)))
@@ -86,16 +86,21 @@
 
 (defun completionist-flat--arrange-candidates ()
   "Arrange candidates."
-  (let* ((index (max 0 completionist--index)) (count completionist-count)
-         (candidates (nthcdr completionist--index completionist--candidates))
+  (let* ((index (max 0 completionist--index))
+         (count completionist-count)
+         (candidates (append (nthcdr completionist--index completionist--candidates)
+                             (butlast completionist--candidates
+                                      (- (length completionist--candidates) completionist--index))))
          (width (- (* completionist-flat-max-lines (- (completionist--window-width) 4))
                    (length (plist-get completionist-flat-format :left))
                    (length (plist-get completionist-flat-format :separator))
                    (length (plist-get completionist-flat-format :right))
-                   (length (plist-get completionist-flat-format :ellipsis))
-                   (car (posn-col-row (posn-at-point (1- (point-max)))))))
+                   ;; (length (plist-get completionist-flat-format :ellipsis))
+                   (car (posn-col-row (posn-at-point (1- (point-max)))))
+                   ))
          (result) (wrapped))
-    (while (and candidates (not (eq wrapped (car candidates)))
+    (while (and candidates
+                ;; (not (eq wrapped (car candidates)))
                 (> width 0) (> count 0))
       (let ((cand (car candidates)))
         (setq cand (car (funcall completionist--highlight (list cand))))
@@ -112,18 +117,22 @@
         (when (or (not result) (> width 0))
           (push cand result))
         (pop candidates)
-        (when (and completionist-cycle (not candidates))
-          (setq candidates completionist--candidates index 0
-                wrapped (nth completionist--index completionist--candidates)))))
-    (when (if wrapped
-              (> completionist--total (- completionist-count count))
-            (and (/= completionist--total 0) (/= index completionist--total)))
-      (push (plist-get completionist-flat-format :ellipsis) result))
-    (nreverse result)))
+        ;; (when (and completionist-cycle (not candidates))
+        ;;   (setq candidates completionist--candidates
+        ;;         index 0
+        ;;         wrapped (nth completionist--index completionist--candidates)))
+        ))
+    ;; (when (if wrapped
+    ;;           (> completionist--total (- completionist-count count))
+    ;;         (and (/= completionist--total 0) (/= index completionist--total)))
+    ;;   (push (plist-get completionist-flat-format :ellipsis) result))
+    (nreverse result)
+    ;; (nreverse candidates)
+    ))
 
 ;;;###autoload
 (define-minor-mode completionist-flat-mode
-  "Flat, horizontal display for Vertico."
+  "Flat, horizontal display for Completionist."
   :global t :group 'completionist
   ;; Shrink current minibuffer window
   (when-let (win (active-minibuffer-window))
