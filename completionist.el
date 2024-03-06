@@ -215,15 +215,13 @@ The value should lie between 0 and completionist-count/2."
    ;; (and (equal (car completionist--history-hash) completionist--base) (cdr completionist--history-hash))
       (let* ((base completionist--base)
              (base-size (length base))
-             (hist (and (not (eq minibuffer-history-variable t)) ;; Disabled for `t'.
-                        (symbol-value minibuffer-history-variable)))
+             (hist minibuffer-history)
              (hash (make-hash-table :test #'equal :size (length hist))))
         (cl-loop for elem in hist for index from 0 do
                  (when (or (= base-size 0)
                            (and (>= (length elem) base-size)
                                 (eq t (compare-strings base 0 base-size elem 0 base-size))))
-                   (let ((file-sep (and (eq minibuffer-history-variable 'file-name-history)
-                                        (string-match-p "/" elem base-size))))
+                   (let ((file-sep nil))
                      ;; Drop base string from history elements & special file handling.
                      (when (or (> base-size 0) file-sep)
                        (setq elem (substring elem base-size (and file-sep (1+ file-sep)))))
