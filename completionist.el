@@ -62,6 +62,10 @@
   "Maximal number of candidates to show."
   :type 'integer)
 
+(defcustom completionist-initial-index 0
+  "Initial completionist index."
+  :type 'integer)
+
 (defcustom completionist-scroll-margin 2
   "Number of lines at the top and bottom when scrolling.
 The value should lie between 0 and completionist-count/2."
@@ -777,8 +781,8 @@ When the prefix argument is 0, the group order is reset."
     (with-current-buffer buf
       (let ((state (completionist--recompute 1 " ")))
         (dolist (s state) (set (car s) (cdr s))))
-      (setq completionist--index 1)
-      (redisplay)
+      (setq completionist--index completionist-initial-index)
+      (completionist--exhibit buf)
       )
     ))
 (defun completionist--candidate (&optional hl)
