@@ -457,36 +457,41 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
 (defun completionist--prepare ()
   "Ensure that the state is prepared before running the next command."
   (when (and (symbolp this-command) (string-prefix-p "completionist-" (symbol-name this-command)))
-    (completionist--update)))
+    (completionist--update completionist--buffer)))
 
-(defun completionist--update (&optional interruptible)
+(defun completionist--update (buffer &optional interruptible)
   "Update state, optionally INTERRUPTIBLE."
-  (let* (
-         ;; (pt (max 0 (- (point) (completionist-prompt-end))))
-         (pt (- (point) (point-min)))
-         (content (completionist-contents-no-properties))
-         (input (cons content pt)))
-    (setq completionist--table (funcall completionist--collector))
-    (unless (or (and interruptible (input-pending-p)) (equal completionist--input input))
-      ;; Redisplay the minibuffer such that the input becomes immediately
-      ;; visible before the expensive candidate recomputation (Issue #89).
-      ;; Do not redisplay during initialization, since this leads to flicker.
-      (when (and interruptible (consp completionist--input)) (redisplay))
-      (pcase (let ((completionist--metadata (completion-metadata (substring content 0 pt)
-                                                                 completionist--table
-                                                                 completionist--predicate)))
-               ;; If Tramp is used, do not compute the candidates in an interruptible fashion,
-               ;; since this will break the Tramp password and user name prompts (See #23).
-               (if (or (not interruptible)
-                       (and (eq 'file (completionist--metadata-get 'category))
-                            (or (completionist--remote-p content) (completionist--remote-p default-directory))))
-                   (completionist--recompute pt content)
-                 (let ((non-essential t))
-                   (while-no-input (completionist--recompute pt content)))))
-        ('nil (abort-recursive-edit))
-        ((and state (pred consp))
-         (setq completionist--input input)
-         (dolist (s state) (set (car s) (cdr s))))))))
+  (with-current-buffer buffer
+    (let* (
+           ;; (pt (max 0 (- (point) (completionist-prompt-end))))
+           (pt (- (point) (point-min)))
+           (content (completionist-contents-no-properties))
+           (input (cons content pt)))
+      (setq completionist--table (funcall completionist--collector))
+      (unless (or (and interruptible (input-pending-p))
+                  ;; (equal completionist--input input)
+                  )
+        ;; Redisplay the minibuffer such that the input becomes immediately
+        ;; visible before the expensive candidate recomputation (Issue #89).
+        ;; Do not redisplay during initialization, since this leads to flicker.
+        (when (and interruptible (consp completionist--input)) (redisplay))
+        (pcase (let ((completionist--metadata (completion-metadata (substring content 0 pt)
+                                                                   completionist--table
+                                                                   completionist--predicate)))
+                 ;; If Tramp is used, do not compute the candidates in an interruptible fashion,
+                 ;; since this will break the Tramp password and user name prompts (See #23).
+                 (if (or (not interruptible)
+                         (and (eq 'file (completionist--metadata-get 'category))
+                              (or (completionist--remote-p content) (completionist--remote-p default-directory))))
+                     (completionist--recompute pt content)
+                   (let ((non-essential t))
+                     (while-no-input (completionist--recompute pt content)))))
+          ;; ('nil (abort-recursive-edit))
+          (
+           (and state (pred consp))
+           (setq completionist--input input)
+           (dolist (s state) (set (car s) (cdr s)))
+           ))))))
 
 (defun completionist--display-string (str)
   "Return display STR without display and invisible properties."
@@ -506,7 +511,7 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
 
 (defun completionist--window-width ()
   "Return minimum width of windows, which display the minibuffer."
-  (cl-loop for win in (get-buffer-window-list) minimize (window-width win)))
+  (cl-loop for win in (get-buffer-window-list completionist--buffer) minimize (window-width win)))
 
 (defun completionist--truncate-multiline (cand max-width)
   "Truncate multiline CAND to MAX-WIDTH."
@@ -644,14 +649,15 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
         (put-text-property beg next 'face (remq face (if (listp val) val (list val))) obj))
       (setq beg next))))
 
-(defun completionist--exhibit ()
+(defun completionist--exhibit (buf)
   "Exhibit completion UI."
-  (let ((buffer-undo-list t)
-        ) ;; Overlays affect point position and undo list!
-    (completionist--update 'interruptible)
-    (completionist--display-count)
-    (completionist--display-prompt)
-    (completionist--display-candidates (completionist--arrange-candidates))))
+  (with-current-buffer buf
+    (let ((buffer-undo-list t)
+          ) ;; Overlays affect point position and undo list!
+      (completionist--update completionist--buffer 'interruptible)
+      (completionist--display-count)
+      (completionist--display-prompt)
+      (completionist--display-candidates (completionist--arrange-candidates)))))
 
 (defun completionist--allow-prompt-p ()
   "Return t if prompt can be selected."
@@ -821,22 +827,25 @@ When the prefix argument is 0, the group order is reset."
               completion-show-inline-help nil)
   (use-local-map completionist-map)
   (add-hook 'pre-command-hook #'completionist--prepare nil 'local)
-  (add-hook 'post-command-hook #'completionist--exhibit nil 'local))
+  (add-hook 'post-command-hook (apply-partially #'completionist--exhibit
+                                                completionist--buffer)
+            nil 'local)
+  )
 
-(defun completionist--complete (prompt collector handler buffer-name &optional unfocusp)
-  (let ((window-min-height 1)
-        (minibuffer--require-match nil)
-        (action '((display-buffer-in-side-window)
-			      (side . top)
-			      (slot . 0)))
-        (displayer (if unfocusp 'display-buffer 'pop-to-buffer)))
-    (with-current-buffer (get-buffer-create buffer-name)
-      (unless completionist--buffer
+(defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp)
+  (let* ((window-min-height 1)
+         (minibuffer--require-match nil)
+         (displayer (if unfocusp 'display-buffer 'pop-to-buffer))
+         (initializedp (buffer-live-p (get-buffer buffer-name)))
+         (buffer (get-buffer-create buffer-name)))
+    (with-current-buffer buffer
+      (setq horizontal-scroll-bar nil)
+      (unless initializedp
         (completionist--setup prompt collector handler))
-      (funcall displayer completionist--buffer
-		       action)
-      (completionist--exhibit)
-      (fit-window-to-buffer))))
+      (funcall displayer buffer action)
+      (with-selected-window (get-buffer-window buffer)
+        (window-preserve-size)
+        (completionist--exhibit buffer)))))
 
 (defun completionist--advice (&rest args)
   "Advice for completion function, receiving ARGS."
