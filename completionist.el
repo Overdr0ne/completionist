@@ -575,7 +575,9 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
                  (nbutlast lines)
                (setq curr-line (1- curr-line) lines (cdr lines))))
     ;; Format candidates
-    (let ((max-width (- (completionist--window-width) 4)) start)
+    (let ((max-width (- (or (completionist--window-width) (window-width))
+                        4))
+          start)
       (cl-loop for line on lines do
                (pcase (car line)
                  (`(,index ,cand ,prefix ,suffix)
@@ -805,7 +807,7 @@ When the prefix argument is 0, the group order is reset."
      ((and (equal content "") (or (car-safe minibuffer-default) minibuffer-default)))
      (t content))))
 
-(defun completionist--setup (prompt collector handler)
+(defun completionist--setup (&optional prompt collector handler)
   "Setup completion UI."
   (setq-local completionist-cycle t)
   (setq mode-line-format nil)
