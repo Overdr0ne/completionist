@@ -73,7 +73,7 @@
   "Scroll down by N lines."
   (completionist-mouse--scroll-up (- n)))
 
-(defun completionist-mouse--setup (prompt collector handler)
+(defun completionist-mouse--setup (_prompt _collector _handler)
   "Setup mouse scrolling."
   (setq-local mwheel-scroll-up-function #'completionist-mouse--scroll-up
               mwheel-scroll-down-function #'completionist-mouse--scroll-down))
@@ -84,8 +84,10 @@
   :global t :group 'completionist
   (cond
    (completionist-mouse-mode
-    (advice-add #'completionist--format-candidate :around #'completionist-mouse--format-candidate)
-    (advice-add #'completionist--setup :after #'completionist-mouse--setup))
+    (advice-add #'completionist--format-candidate
+                :around #'completionist-mouse--format-candidate)
+    (advice-add #'completionist--setup
+                :after #'completionist-mouse--setup))
    (t
     (advice-remove #'completionist--format-candidate #'completionist-mouse--format-candidate)
     (advice-remove #'completionist--setup #'completionist-mouse--setup))))
