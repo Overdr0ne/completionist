@@ -591,7 +591,7 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
   "Update candidates overlay `completionist--candidates-ov' with LINES."
   (move-overlay completionist--candidates-ov (point-max) (point-max))
   (overlay-put completionist--candidates-ov 'after-string
-               (apply #'concat #(" " 0 1 (cursor t)) (and lines "\n") lines))
+               (apply #'concat (and lines "\n") lines))
   (completionist--resize-window (length lines)))
 
 (defun completionist--resize-window (height)
