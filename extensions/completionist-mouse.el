@@ -73,7 +73,7 @@
   "Scroll down by N lines."
   (completionist-mouse--scroll-up (- n)))
 
-(defun completionist-mouse--setup (_prompt _collector _handler)
+(defun completionist-mouse--setup (_prompt _collector _handler &optional _display-mode)
   "Setup mouse scrolling."
   (setq-local mwheel-scroll-up-function #'completionist-mouse--scroll-up
               mwheel-scroll-down-function #'completionist-mouse--scroll-down))

@@ -87,7 +87,7 @@
         (window-resize mbwin (- (window-pixel-height mbwin)) nil nil 'pixelwise)
         (set-window-vscroll mbwin 100)))))
 
-(defun completionist-buffer--setup ()
+(defun completionist-buffer--setup (&optional _prompt _collector _handler _display-mode)
   "Setup buffer display."
   (add-hook 'pre-redisplay-functions 'completionist-buffer--redisplay nil 'local)
   (let* ((action completionist-buffer-display-action) tmp win

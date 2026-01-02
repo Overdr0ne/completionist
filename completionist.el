@@ -202,6 +202,14 @@ The value should lie between 0 and completionist-count/2."
 
 (defvar-local completionist--handler nil)
 
+(defvar-local completionist--arrange-fn nil
+  "Buffer-local function to arrange candidates.
+If nil, use default `completionist--arrange-candidates-default'.")
+
+(defvar-local completionist--display-fn nil
+  "Buffer-local function to display candidates.
+If nil, use default `completionist--display-candidates-default'.")
+
 (defun completionist-prompt-end ()
   1)
 
@@ -546,8 +554,8 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
     (completionist--remove-face 0 (length title) 'completions-first-difference title))
   (format (concat completionist-group-format "\n") title))
 
-(defun completionist--arrange-candidates ()
-  "Arrange candidates."
+(defun completionist--arrange-candidates-default ()
+  "Arrange candidates (default vertical layout)."
   (completionist--compute-scroll)
   (let ((curr-line 0) lines)
     ;; Compute group titles
@@ -587,12 +595,20 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
                   (setcar line (completionist--format-candidate cand prefix suffix index start))))))
     lines))
 
-(defun completionist--display-candidates (lines)
-  "Update candidates overlay `completionist--candidates-ov' with LINES."
+(defun completionist--arrange-candidates ()
+  "Arrange candidates using buffer-local or default function."
+  (funcall (or completionist--arrange-fn #'completionist--arrange-candidates-default)))
+
+(defun completionist--display-candidates-default (lines)
+  "Update candidates overlay `completionist--candidates-ov' with LINES (default)."
   (move-overlay completionist--candidates-ov (point-max) (point-max))
   (overlay-put completionist--candidates-ov 'after-string
                (apply #'concat (and lines "\n") lines))
   (completionist--resize-window (length lines)))
+
+(defun completionist--display-candidates (lines)
+  "Display candidates using buffer-local or default function."
+  (funcall (or completionist--display-fn #'completionist--display-candidates-default) lines))
 
 (defun completionist--resize-window (height)
   "Resize active minibuffer window to HEIGHT."
@@ -653,12 +669,13 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
 (defun completionist--exhibit (buf)
   "Exhibit completion UI."
   (with-current-buffer buf
-    (let ((buffer-undo-list t)
-          ) ;; Overlays affect point position and undo list!
+    (let ((buffer-undo-list t)) ;; Overlays affect point position and undo list!
       (completionist--update completionist--buffer 'interruptible)
       (completionist--display-count)
       (completionist--display-prompt)
-      (completionist--display-candidates (completionist--arrange-candidates)))))
+      (completionist--display-candidates (completionist--arrange-candidates))
+      ;; Ensure cursor is positioned at end of input text (before candidates overlay)
+      (goto-char (point-max)))))
 
 (defun completionist--allow-prompt-p ()
   "Return t if prompt can be selected."
@@ -807,8 +824,13 @@ When the prefix argument is 0, the group order is reset."
      ((and (equal content "") (or (car-safe minibuffer-default) minibuffer-default)))
      (t content))))
 
-(defun completionist--setup (&optional prompt collector handler)
-  "Setup completion UI."
+(defun completionist--setup (&optional prompt collector handler display-mode)
+  "Setup completion UI.
+DISPLAY-MODE can be:
+  nil          - default vertical layout
+  'flat        - horizontal flat layout
+  'grid        - grid layout
+  (cons arrange-fn display-fn) - custom functions"
   (setq-local completionist-cycle t)
   (setq mode-line-format nil)
   (setq completionist--buffer (current-buffer)
@@ -826,6 +848,19 @@ When the prefix argument is 0, the group order is reset."
   (overlay-put completionist--candidates-ov 'priority 3)
   (setq-local completion-auto-help nil
               completion-show-inline-help nil)
+  ;; Set display mode
+  (pcase display-mode
+    ('flat
+     (require 'completionist-flat)
+     (setq-local completionist--arrange-fn #'completionist-flat--arrange-candidates
+                 completionist--display-fn #'completionist-flat--display-candidates))
+    ('grid
+     (require 'completionist-grid)
+     (setq-local completionist--arrange-fn #'completionist-grid--arrange-candidates))
+    ((pred consp)
+     (setq-local completionist--arrange-fn (car display-mode)
+                 completionist--display-fn (cdr display-mode)))
+    (_ nil)) ; Use defaults
   (use-local-map completionist-map)
   (add-hook 'pre-command-hook #'completionist--prepare nil 'local)
   (add-hook 'post-command-hook (apply-partially #'completionist--exhibit
@@ -833,7 +868,15 @@ When the prefix argument is 0, the group order is reset."
             nil 'local)
   )
 
-(defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp)
+(defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp display-mode)
+  "Create or update a persistent completion buffer.
+PROMPT: String to display before input area.
+COLLECTOR: Function returning list of candidate strings.
+HANDLER: Function called with selected candidate.
+BUFFER-NAME: Name for the persistent buffer.
+ACTION: display-buffer action controlling window placement.
+UNFOCUSP: If non-nil, don't focus the completion buffer.
+DISPLAY-MODE: Display style - nil (default vertical), 'flat, 'grid, or (cons arrange-fn display-fn)."
   (let* ((window-min-height 1)
          (minibuffer--require-match nil)
          (displayer (if unfocusp 'display-buffer 'pop-to-buffer))
@@ -842,7 +885,7 @@ When the prefix argument is 0, the group order is reset."
     (with-current-buffer buffer
       (setq horizontal-scroll-bar nil)
       (unless initializedp
-        (completionist--setup prompt collector handler))
+        (completionist--setup prompt collector handler display-mode))
       (funcall displayer buffer action)
       (with-selected-window (get-buffer-window buffer)
         (window-preserve-size)
