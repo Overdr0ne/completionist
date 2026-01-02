@@ -214,8 +214,10 @@ If nil, use default `completionist--display-candidates-default'.")
   1)
 
 (defun completionist-contents-no-properties ()
+  "Get buffer contents, excluding the zero-width space separator."
   (with-current-buffer completionist--buffer
-    (buffer-substring-no-properties (point-min) (point-max))))
+    ;; Exclude the last character (zero-width space separator)
+    (buffer-substring-no-properties (point-min) (max (point-min) (1- (point-max))))))
 
 (defun completionist--history-hash ()
   "Recompute history hash table and return it."
@@ -601,6 +603,7 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
 
 (defun completionist--display-candidates-default (lines)
   "Update candidates overlay `completionist--candidates-ov' with LINES (default)."
+  ;; Position at point-max (after user input)
   (move-overlay completionist--candidates-ov (point-max) (point-max))
   (overlay-put completionist--candidates-ov 'after-string
                (apply #'concat (and lines "\n") lines))
@@ -611,20 +614,21 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
   (funcall (or completionist--display-fn #'completionist--display-candidates-default) lines))
 
 (defun completionist--resize-window (height)
-  "Resize active minibuffer window to HEIGHT."
-  (setq-local truncate-lines (< (point) (* 0.8 (completionist--window-width)))
-              resize-mini-windows 'grow-only
-              max-mini-window-height 1.0)
-  (unless (frame-root-window-p (active-minibuffer-window))
-    (unless completionist-resize
-      (setq height (max height completionist-count)))
-    (let* ((window-resize-pixelwise t)
-           (dp (- (max (cdr (window-text-pixel-size))
-                       (* (default-line-height) (1+ height)))
-                  (window-pixel-height))))
-      (when (or (and (> dp 0) (/= height 0))
-                (and (< dp 0) (eq completionist-resize t)))
-        (window-resize nil dp nil nil 'pixelwise)))))
+  "Resize completionist window to HEIGHT.
+For persistent buffers, this adjusts the window height."
+  (setq-local truncate-lines (< (point) (* 0.8 (completionist--window-width))))
+  (when-let ((win (get-buffer-window (current-buffer))))
+    (unless (or (window-minibuffer-p win) (frame-root-window-p win))
+      (unless completionist-resize
+        (setq height (max height completionist-count)))
+      (let* ((window-resize-pixelwise t)
+             (dp (- (max (cdr (window-text-pixel-size))
+                         (* (default-line-height) (1+ height)))
+                    (window-pixel-height win))))
+        (when (or (and (> dp 0) (/= height 0))
+                  (and (< dp 0) (eq completionist-resize t)))
+          (with-selected-window win
+            (window-resize nil dp nil nil 'pixelwise)))))))
 
 (defun completionist--format-count ()
   "Format the count string."
@@ -674,8 +678,9 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
       (completionist--display-count)
       (completionist--display-prompt)
       (completionist--display-candidates (completionist--arrange-candidates))
-      ;; Ensure cursor is positioned at end of input text (before candidates overlay)
-      (goto-char (point-max)))))
+      ;; Position cursor at end of user input, before the zero-width space separator
+      ;; The zero-width space is at (point-max), user input ends at (1- (point-max))
+      (goto-char (1- (point-max))))))
 
 (defun completionist--allow-prompt-p ()
   "Return t if prompt can be selected."
@@ -799,7 +804,8 @@ When the prefix argument is 0, the group order is reset."
         (hand completionist--handler)
         (buf completionist--buffer))
     (push cand minibuffer-history)
-    (delete-region (point-min) (point-max))
+    ;; Clear user input but preserve the zero-width space separator at end
+    (delete-region (point-min) (max (point-min) (1- (point-max))))
     (other-window +1)
     (apply hand `(,cand))
     (with-current-buffer buf
@@ -833,6 +839,13 @@ DISPLAY-MODE can be:
   (cons arrange-fn display-fn) - custom functions"
   (setq-local completionist-cycle t)
   (setq mode-line-format nil)
+  ;; Ensure buffer is empty and cursor at start
+  (erase-buffer)
+  ;; Insert a zero-width space to separate input area from candidates overlay
+  ;; This ensures point-max != point-min so overlays have distinct positions
+  ;; The zero-width space is invisible but provides a buffer position for overlays
+  (insert "\u200B")  ; zero-width space (U+200B)
+  (goto-char (point-min))
   (setq completionist--buffer (current-buffer)
         completionist--input t
         completionist--prompt prompt
@@ -841,11 +854,14 @@ DISPLAY-MODE can be:
         completionist--handler handler
         completionist--count-ov (make-overlay (point-min) (point-min))
         completionist--prompt-ov (make-overlay (point-min) (point-min))
+        ;; Candidates overlay at point-max so it appears AFTER cursor/input
         completionist--candidates-ov (make-overlay (point-max) (point-max) nil t t))
-  ;; Set priority for compatibility with `minibuffer-depth-indicate-mode'
+  ;; Priority controls order of overlays at same position
+  ;; For before-strings at the same position, lower priority appears first
+  ;; We want: COUNT (if present) → PROMPT → [cursor/input] → CANDIDATES
   (overlay-put completionist--count-ov 'priority 1)
   (overlay-put completionist--prompt-ov 'priority 2)
-  (overlay-put completionist--candidates-ov 'priority 3)
+  (overlay-put completionist--candidates-ov 'priority 0)
   (setq-local completion-auto-help nil
               completion-show-inline-help nil)
   ;; Set display mode
