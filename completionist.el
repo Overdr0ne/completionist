@@ -135,6 +135,7 @@ The value should lie between 0 and completionist-count/2."
     (define-key map "\M-\r" #'completionist-exit-input)
     (define-key map "\t" #'completionist-insert)
     (define-key map "\C-l" #'completionist-insert)
+    (define-key map "\C-q" #'quit-window)
     map)
   "Completionist minibuffer keymap derived from `minibuffer-local-map'.")
 
