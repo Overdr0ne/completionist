@@ -215,9 +215,9 @@ If nil, use default `completionist--display-candidates-default'.")
   1)
 
 (defun completionist-contents-no-properties ()
-  "Get buffer contents, excluding the zero-width space separator."
+  "Get buffer contents, excluding the invisible separator space."
   (with-current-buffer completionist--buffer
-    ;; Exclude the last character (zero-width space separator)
+    ;; Exclude the last character (invisible separator space)
     (buffer-substring-no-properties (point-min) (max (point-min) (1- (point-max))))))
 
 (defun completionist--history-hash ()
@@ -679,8 +679,8 @@ For persistent buffers, this adjusts the window height."
       (completionist--display-count)
       (completionist--display-prompt)
       (completionist--display-candidates (completionist--arrange-candidates))
-      ;; Position cursor at end of user input, before the zero-width space separator
-      ;; The zero-width space is at (point-max), user input ends at (1- (point-max))
+      ;; Position cursor at end of user input, before the invisible separator space
+      ;; The separator space is at (point-max), user input ends at (1- (point-max))
       (goto-char (1- (point-max))))))
 
 (defun completionist--allow-prompt-p ()
@@ -793,8 +793,10 @@ When the prefix argument is 0, the group order is reset."
   ;; suffix "/calc". Default completion has the same problem when selecting in
   ;; the *Completions* buffer. See bug#48356.
   (when (> completionist--total 0)
-    (let ((completionist--index (max 0 completionist--index)))
-      (delete-region (point-min) (point-max))
+    (let ((completionist--index (max 0 completionist--index))
+          (inhibit-read-only t))
+      ;; Delete user input but preserve separator space at end
+      (delete-region (point-min) (max (point-min) (1- (point-max))))
       (insert (completionist--candidate)))
     (completionist-contents-no-properties)))
 
@@ -805,8 +807,9 @@ When the prefix argument is 0, the group order is reset."
         (hand completionist--handler)
         (buf completionist--buffer))
     (push cand minibuffer-history)
-    ;; Clear user input but preserve the zero-width space separator at end
-    (delete-region (point-min) (max (point-min) (1- (point-max))))
+    ;; Clear user input but preserve the invisible separator space at end
+    (let ((inhibit-read-only t))
+      (delete-region (point-min) (max (point-min) (1- (point-max)))))
     (other-window +1)
     (apply hand `(,cand))
     (with-current-buffer buf
@@ -831,6 +834,19 @@ When the prefix argument is 0, the group order is reset."
      ((and (equal content "") (or (car-safe minibuffer-default) minibuffer-default)))
      (t content))))
 
+(defun completionist--protect-separator (beg end)
+  "Prevent deletion or modification of the invisible separator space.
+BEG and END define the region about to be changed.
+The separator is the last character in the buffer and must be preserved
+to maintain proper overlay positioning."
+  (when (and (not inhibit-read-only)  ; Allow programmatic modifications
+             (> (point-max) (point-min)))  ; Buffer has content
+    (let ((separator-pos (1- (point-max))))
+      ;; Check if the change region includes the separator position
+      (when (and (>= separator-pos beg)
+                 (< separator-pos end))
+        (error "Cannot modify the buffer separator")))))
+
 (defun completionist--setup (&optional prompt collector handler display-mode)
   "Setup completion UI.
 DISPLAY-MODE can be:
@@ -841,12 +857,22 @@ DISPLAY-MODE can be:
   (setq-local completionist-cycle t)
   (setq mode-line-format nil)
   ;; Ensure buffer is empty and cursor at start
-  (erase-buffer)
-  ;; Insert a zero-width space to separate input area from candidates overlay
-  ;; This ensures point-max != point-min so overlays have distinct positions
-  ;; The zero-width space is invisible but provides a buffer position for overlays
-  (insert "\u200B")  ; zero-width space (U+200B)
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    ;; Insert a separator space to separate input area from candidates overlay
+    ;; This ensures point-max != point-min so overlays have distinct positions
+    ;; Make it read-only, invisible, and intangible to protect it from user modifications
+    (let ((separator-pos (point)))
+      (insert " ")
+      (put-text-property separator-pos (point) 'read-only t)
+      (put-text-property separator-pos (point) 'invisible t)
+      (put-text-property separator-pos (point) 'cursor-intangible t)
+      (put-text-property separator-pos (point) 'rear-nonsticky t)))
   (goto-char (point-min))
+  ;; Enable cursor-intangible-mode to prevent cursor from moving past separator
+  (cursor-intangible-mode 1)
+  ;; Add protection against accidental separator deletion
+  (add-hook 'before-change-functions #'completionist--protect-separator nil 'local)
   (setq completionist--buffer (current-buffer)
         completionist--input t
         completionist--prompt prompt
