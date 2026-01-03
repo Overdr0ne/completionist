@@ -914,6 +914,22 @@ DISPLAY-MODE can be:
             nil 'local)
   )
 
+(defun completionist--calculate-count (display-mode window)
+  "Calculate appropriate number of candidates for DISPLAY-MODE in WINDOW."
+  (with-selected-window window
+    (cond
+     ;; Flat mode: use a reasonable default since width calculation is complex
+     ;; Could be improved to calculate based on window-width and average candidate length
+     ((eq display-mode 'flat)
+      (max 5 (min 20 (/ (window-width) 15))))
+     ;; Grid mode: similar complexity to flat
+     ((eq display-mode 'grid)
+      (max 6 (* 3 (/ (window-height) 3))))
+     ;; Vertical mode (default): fit candidates to window height
+     (t
+      ;; Window height minus space for prompt/count line and margin
+      (max 3 (- (window-height) 2))))))
+
 (defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp display-mode)
   "Create or update a persistent completion buffer.
 PROMPT: String to display before input area.
@@ -934,6 +950,9 @@ DISPLAY-MODE: Display style - nil (default vertical), 'flat, 'grid, or (cons arr
         (completionist--setup prompt collector handler display-mode))
       (funcall displayer buffer action)
       (with-selected-window (get-buffer-window buffer)
+        ;; Calculate and set buffer-local completionist-count based on window size
+        (setq-local completionist-count
+                    (completionist--calculate-count display-mode (selected-window)))
         (window-preserve-size)
         (completionist--exhibit buffer)))))
 
