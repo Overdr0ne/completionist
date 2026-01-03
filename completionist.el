@@ -611,7 +611,8 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
   (move-overlay completionist--candidates-ov (point-max) (point-max))
   (overlay-put completionist--candidates-ov 'after-string
                (apply #'concat (and lines "\n") lines))
-  (completionist--resize-window (length lines)))
+  ;; (completionist--resize-window (length lines))
+  )
 
 (defun completionist--display-candidates (lines)
   "Display candidates using buffer-local or default function."
