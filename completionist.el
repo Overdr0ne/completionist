@@ -43,7 +43,7 @@
   :group 'convenience
   :prefix "completionist-")
 
-(defcustom completionist-count-format (cons "%-6s " "%s/%s")
+(defcustom completionist-count-format (cons "%s " "(%s/%s)") ; (cons "%-6s " "%s/%s")
   "Format string used for the candidate count."
   :type '(choice (const :tag "No candidate count" nil) (cons string string)))
 
