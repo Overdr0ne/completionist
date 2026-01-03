@@ -59,8 +59,10 @@
   :type '(choice (const :tag "No group titles" nil) string))
 
 (defcustom completionist-count 10
-  "Maximal number of candidates to show."
-  :type 'integer)
+  "Maximal number of candidates to show.
+This is calculated dynamically per buffer based on window size."
+  :type 'integer
+  :local 'permanent)
 
 (defcustom completionist-initial-index 0
   "Initial completionist index."
@@ -79,7 +81,8 @@ The value should lie between 0 and completionist-count/2."
 
 (defcustom completionist-cycle nil
   "Enable cycling for `completionist-next' and `completionist-previous'."
-  :type 'boolean)
+  :type 'boolean
+  :local 'permanent)
 
 (defcustom completionist-multiline
   (cons #("⤶" 0 1 (face completionist-multiline)) #("…" 0 1 (face completionist-multiline)))
