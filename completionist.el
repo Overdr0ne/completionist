@@ -214,6 +214,12 @@ If nil, use default `completionist--arrange-candidates-default'.")
   "Buffer-local function to display candidates.
 If nil, use default `completionist--display-candidates-default'.")
 
+(defvar-local completionist--update-timer nil
+  "Timer for automatic buffer updates.")
+
+(defvar-local completionist--update-hook-removers nil
+  "List of functions to call to remove update hooks.")
+
 (defun completionist-prompt-end ()
   1)
 
@@ -931,7 +937,48 @@ DISPLAY-MODE can be:
       ;; Window height minus space for prompt/count line and margin
       (max 3 (- (window-height) 2))))))
 
-(defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp display-mode)
+(defun completionist--cleanup-updates ()
+  "Clean up timers and hooks for this buffer."
+  ;; Cancel timer if exists
+  (when completionist--update-timer
+    (cancel-timer completionist--update-timer)
+    (setq completionist--update-timer nil))
+  ;; Remove hooks
+  (dolist (remover completionist--update-hook-removers)
+    (funcall remover))
+  (setq completionist--update-hook-removers nil))
+
+(defun completionist--setup-updates (buffer update-hooks update-interval)
+  "Setup automatic updates for BUFFER.
+UPDATE-HOOKS: List of hooks to attach to.
+UPDATE-INTERVAL: Seconds between updates, or nil for no timer."
+  (with-current-buffer buffer
+    ;; Clean up any existing updates first
+    (completionist--cleanup-updates)
+
+    ;; Setup hook-based updates
+    (when update-hooks
+      (dolist (hook update-hooks)
+        (let ((update-fn (lambda ()
+                          (when (buffer-live-p buffer)
+                            (completionist--exhibit buffer)))))
+          (add-hook hook update-fn)
+          ;; Store removal function
+          (push (lambda () (remove-hook hook update-fn))
+                completionist--update-hook-removers))))
+
+    ;; Setup timer-based updates
+    (when (and update-interval (> update-interval 0))
+      (setq completionist--update-timer
+            (run-with-timer update-interval update-interval
+                           (lambda ()
+                             (when (buffer-live-p buffer)
+                               (completionist--exhibit buffer))))))
+
+    ;; Cleanup on kill
+    (add-hook 'kill-buffer-hook #'completionist--cleanup-updates nil 'local)))
+
+(defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp display-mode update-hooks update-interval)
   "Create or update a persistent completion buffer.
 PROMPT: String to display before input area.
 COLLECTOR: Function returning list of candidate strings.
@@ -939,7 +986,9 @@ HANDLER: Function called with selected candidate.
 BUFFER-NAME: Name for the persistent buffer.
 ACTION: display-buffer action controlling window placement.
 UNFOCUSP: If non-nil, don't focus the completion buffer.
-DISPLAY-MODE: Display style - nil (default vertical), 'flat, 'grid, or (cons arrange-fn display-fn)."
+DISPLAY-MODE: Display style - nil (default vertical), 'flat, 'grid, or (cons arrange-fn display-fn).
+UPDATE-HOOKS: List of hooks to trigger automatic refresh (e.g., '(persp-created-hook persp-killed-hook)).
+UPDATE-INTERVAL: Seconds between automatic refreshes, or nil for no timer."
   (let* ((window-min-height 1)
          (minibuffer--require-match nil)
          (displayer (if unfocusp 'display-buffer 'pop-to-buffer))
@@ -949,6 +998,9 @@ DISPLAY-MODE: Display style - nil (default vertical), 'flat, 'grid, or (cons arr
       (setq horizontal-scroll-bar nil)
       (unless initializedp
         (completionist--setup prompt collector handler display-mode))
+      ;; Setup automatic updates (can be called even if buffer already exists)
+      (when (or update-hooks update-interval)
+        (completionist--setup-updates buffer update-hooks update-interval))
       (funcall displayer buffer action)
       (with-selected-window (get-buffer-window buffer)
         ;; Calculate and set buffer-local completionist-count based on window size
@@ -975,6 +1027,8 @@ DISPLAY-MODE: Display style - nil (default vertical), 'flat, 'grid, or (cons arr
 (defun completionist--command-p (_sym buffer)
   "Return non-nil if Completionist is active in BUFFER."
   (buffer-local-value 'completionist--input buffer))
+
+;;(require 'completionist-widgets)
 
 (provide 'completionist)
 ;;; completionist.el ends here
