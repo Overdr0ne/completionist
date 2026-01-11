@@ -148,6 +148,9 @@ The value should lie between 0 and completionist-count/2."
 (defvar-local completionist--history-hash nil
   "History hash table and corresponding base string.")
 
+(defvar-local completionist--history nil
+  "Buffer-local history of selected candidates for this widget.")
+
 (defvar-local completionist--candidates-ov nil
   "Overlay showing the candidates.")
 
@@ -214,6 +217,10 @@ If nil, use default `completionist--arrange-candidates-default'.")
   "Buffer-local function to display candidates.
 If nil, use default `completionist--display-candidates-default'.")
 
+(defvar-local completionist--sort-fn nil
+  "Buffer-local sorting function for this widget.
+If nil, use `completionist-sort-function'.")
+
 (defvar-local completionist--update-timer nil
   "Timer for automatic buffer updates.")
 
@@ -235,7 +242,7 @@ If nil, use default `completionist--display-candidates-default'.")
    ;; (and (equal (car completionist--history-hash) completionist--base) (cdr completionist--history-hash))
       (let* ((base completionist--base)
              (base-size (length base))
-             (hist minibuffer-history)
+             (hist completionist--history)
              (hash (make-hash-table :test #'equal :size (length hist))))
         (cl-loop for elem in hist for index from 0 do
                  (when (or (= base-size 0)
@@ -353,7 +360,8 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
 
 (defun completionist--sort-function ()
   "Return the sorting function."
-  (or completionist-sort-override-function
+  (or completionist--sort-fn
+      completionist-sort-override-function
       (completionist--metadata-get 'display-sort-function)
       completionist-sort-function))
 
@@ -475,7 +483,9 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
 
 (defun completionist--prepare ()
   "Ensure that the state is prepared before running the next command."
-  (when (and (symbolp this-command) (string-prefix-p "completionist-" (symbol-name this-command)))
+  (when (and (symbolp this-command)
+             (string-prefix-p "completionist-" (symbol-name this-command))
+             (buffer-live-p completionist--buffer))
     (completionist--update completionist--buffer)))
 
 (defun completionist--update (buffer &optional interruptible)
@@ -683,15 +693,17 @@ For persistent buffers, this adjusts the window height."
 
 (defun completionist--exhibit (buf)
   "Exhibit completion UI."
-  (with-current-buffer buf
-    (let ((buffer-undo-list t)) ;; Overlays affect point position and undo list!
-      (completionist--update completionist--buffer 'interruptible)
-      (completionist--display-count)
-      (completionist--display-prompt)
-      (completionist--display-candidates (completionist--arrange-candidates))
-      ;; Position cursor at end of user input, before the invisible separator space
-      ;; The separator space is at (point-max), user input ends at (1- (point-max))
-      (goto-char (1- (point-max))))))
+  (when (buffer-live-p buf)
+    (with-current-buffer buf
+      (when (buffer-live-p completionist--buffer)
+        (let ((buffer-undo-list t)) ;; Overlays affect point position and undo list!
+          (completionist--update buf 'interruptible)
+          (completionist--display-count)
+          (completionist--display-prompt)
+          (completionist--display-candidates (completionist--arrange-candidates))
+          ;; Position cursor at end of user input, before the invisible separator space
+          ;; The separator space is at (point-max), user input ends at (1- (point-max))
+          (goto-char (1- (point-max))))))))
 
 (defun completionist--allow-prompt-p ()
   "Return t if prompt can be selected."
@@ -816,7 +828,7 @@ When the prefix argument is 0, the group order is reset."
   (let ((cand (completionist--candidate))
         (hand completionist--handler)
         (buf completionist--buffer))
-    (push cand minibuffer-history)
+    (push cand completionist--history)
     ;; Clear user input but preserve the invisible separator space at end
     (let ((inhibit-read-only t))
       (delete-region (point-min) (max (point-min) (1- (point-max)))))
@@ -893,6 +905,8 @@ DISPLAY-MODE can be:
         completionist--prompt-ov (make-overlay (point-min) (point-min))
         ;; Candidates overlay at point-max so it appears AFTER cursor/input
         completionist--candidates-ov (make-overlay (point-max) (point-max) nil t t))
+  ;; Set minibuffer--require-match as buffer-local to avoid issues with minibuffer
+  (setq-local minibuffer--require-match nil)
   ;; Priority controls order of overlays at same position
   ;; For before-strings at the same position, lower priority appears first
   ;; We want: COUNT (if present) → PROMPT → [cursor/input] → CANDIDATES
@@ -960,7 +974,9 @@ UPDATE-INTERVAL: Seconds between updates, or nil for no timer."
     (when update-hooks
       (dolist (hook update-hooks)
         (let ((update-fn (lambda ()
-                          (when (buffer-live-p buffer)
+                          ;; Only run if buffer is still alive AND current buffer is not minibuffer
+                          (when (and (buffer-live-p buffer)
+                                     (not (minibufferp)))
                             (completionist--exhibit buffer)))))
           (add-hook hook update-fn)
           ;; Store removal function
@@ -978,7 +994,7 @@ UPDATE-INTERVAL: Seconds between updates, or nil for no timer."
     ;; Cleanup on kill
     (add-hook 'kill-buffer-hook #'completionist--cleanup-updates nil 'local)))
 
-(defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp display-mode update-hooks update-interval)
+(defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp display-mode update-hooks update-interval history sort-fn)
   "Create or update a persistent completion buffer.
 PROMPT: String to display before input area.
 COLLECTOR: Function returning list of candidate strings.
@@ -988,9 +1004,10 @@ ACTION: display-buffer action controlling window placement.
 UNFOCUSP: If non-nil, don't focus the completion buffer.
 DISPLAY-MODE: Display style - nil (default vertical), 'flat, 'grid, or (cons arrange-fn display-fn).
 UPDATE-HOOKS: List of hooks to trigger automatic refresh (e.g., '(persp-created-hook persp-killed-hook)).
-UPDATE-INTERVAL: Seconds between automatic refreshes, or nil for no timer."
+UPDATE-INTERVAL: Seconds between automatic refreshes, or nil for no timer.
+HISTORY: Initial history list for this widget (default nil).
+SORT-FN: Sorting function for this widget (default nil, uses `completionist-sort-function')."
   (let* ((window-min-height 1)
-         (minibuffer--require-match nil)
          (displayer (if unfocusp 'display-buffer 'pop-to-buffer))
          (initializedp (buffer-live-p (get-buffer buffer-name)))
          (buffer (get-buffer-create buffer-name)))
@@ -998,6 +1015,12 @@ UPDATE-INTERVAL: Seconds between automatic refreshes, or nil for no timer."
       (setq horizontal-scroll-bar nil)
       (unless initializedp
         (completionist--setup prompt collector handler display-mode))
+      ;; Set buffer-local history if provided
+      (when history
+        (setq-local completionist--history history))
+      ;; Set buffer-local sort function if provided
+      (when sort-fn
+        (setq-local completionist--sort-fn sort-fn))
       ;; Setup automatic updates (can be called even if buffer already exists)
       (when (or update-hooks update-interval)
         (completionist--setup-updates buffer update-hooks update-interval))
@@ -1027,8 +1050,6 @@ UPDATE-INTERVAL: Seconds between automatic refreshes, or nil for no timer."
 (defun completionist--command-p (_sym buffer)
   "Return non-nil if Completionist is active in BUFFER."
   (buffer-local-value 'completionist--input buffer))
-
-;;(require 'completionist-widgets)
 
 (provide 'completionist)
 ;;; completionist.el ends here
