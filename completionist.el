@@ -227,6 +227,9 @@ If nil, use `completionist-sort-function'.")
 (defvar-local completionist--update-hook-removers nil
   "List of functions to call to remove update hooks.")
 
+(defvar-local completionist--update-idle-timer nil
+  "Idle timer for deferred updates from hooks.")
+
 (defun completionist-prompt-end ()
   1)
 
@@ -953,10 +956,14 @@ DISPLAY-MODE can be:
 
 (defun completionist--cleanup-updates ()
   "Clean up timers and hooks for this buffer."
-  ;; Cancel timer if exists
+  ;; Cancel periodic timer if exists
   (when completionist--update-timer
     (cancel-timer completionist--update-timer)
     (setq completionist--update-timer nil))
+  ;; Cancel idle timer if exists
+  (when completionist--update-idle-timer
+    (cancel-timer completionist--update-idle-timer)
+    (setq completionist--update-idle-timer nil))
   ;; Remove hooks
   (dolist (remover completionist--update-hook-removers)
     (funcall remover))
@@ -971,13 +978,23 @@ UPDATE-INTERVAL: Seconds between updates, or nil for no timer."
     (completionist--cleanup-updates)
 
     ;; Setup hook-based updates
+    ;; Use idle timer to defer updates and prevent rapid firing during commands
     (when update-hooks
       (dolist (hook update-hooks)
         (let ((update-fn (lambda ()
-                          ;; Only run if buffer is still alive AND current buffer is not minibuffer
-                          (when (and (buffer-live-p buffer)
-                                     (not (minibufferp)))
-                            (completionist--exhibit buffer)))))
+                          ;; Schedule update for when Emacs is idle
+                          (when (buffer-live-p buffer)
+                            (with-current-buffer buffer
+                              ;; Cancel existing idle timer if any
+                              (when completionist--update-idle-timer
+                                (cancel-timer completionist--update-idle-timer))
+                              ;; Schedule new idle update after 0.3 seconds
+                              (setq completionist--update-idle-timer
+                                    (run-with-idle-timer 0.3 nil
+                                                        (lambda ()
+                                                          (when (and (buffer-live-p buffer)
+                                                                     (not (minibufferp)))
+                                                            (completionist--exhibit buffer))))))))))
           (add-hook hook update-fn)
           ;; Store removal function
           (push (lambda () (remove-hook hook update-fn))
