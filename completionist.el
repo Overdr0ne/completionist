@@ -694,13 +694,18 @@ For persistent buffers, this adjusts the window height."
         (put-text-property beg next 'face (remq face (if (listp val) val (list val))) obj))
       (setq beg next))))
 
-(defun completionist--exhibit (buf)
-  "Exhibit completion UI."
-  (when (buffer-live-p buf)
+(defun completionist--exhibit (buf &optional no-redisplay)
+  "Exhibit completion UI.
+If NO-REDISPLAY is non-nil, skip the redisplay call (for background updates)."
+  (when (and (buffer-live-p buf)
+             ;; Only update if buffer is actually displayed in a window
+             ;; This prevents errors when update hooks/timers fire after quit-window
+             (get-buffer-window buf t))
     (with-current-buffer buf
       (when (buffer-live-p completionist--buffer)
         (let ((buffer-undo-list t)) ;; Overlays affect point position and undo list!
-          (completionist--update buf 'interruptible)
+          ;; Don't pass 'interruptible if we want to avoid redisplay
+          (completionist--update buf (and (not no-redisplay) 'interruptible))
           (completionist--display-count)
           (completionist--display-prompt)
           (completionist--display-candidates (completionist--arrange-candidates))
@@ -994,7 +999,8 @@ UPDATE-INTERVAL: Seconds between updates, or nil for no timer."
                                                         (lambda ()
                                                           (when (and (buffer-live-p buffer)
                                                                      (not (minibufferp)))
-                                                            (completionist--exhibit buffer))))))))))
+                                                            ;; Pass t to skip redisplay for background updates
+                                                            (completionist--exhibit buffer t))))))))))
           (add-hook hook update-fn)
           ;; Store removal function
           (push (lambda () (remove-hook hook update-fn))
@@ -1006,7 +1012,8 @@ UPDATE-INTERVAL: Seconds between updates, or nil for no timer."
             (run-with-timer update-interval update-interval
                            (lambda ()
                              (when (buffer-live-p buffer)
-                               (completionist--exhibit buffer))))))
+                               ;; Pass t to skip redisplay for background updates
+                               (completionist--exhibit buffer t))))))
 
     ;; Cleanup on kill
     (add-hook 'kill-buffer-hook #'completionist--cleanup-updates nil 'local)))
