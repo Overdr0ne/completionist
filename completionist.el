@@ -1034,7 +1034,10 @@ SORT-FN: Sorting function for this widget (default nil, uses `completionist-sort
   (let* ((window-min-height 1)
          (displayer (if unfocusp 'display-buffer 'pop-to-buffer))
          (initializedp (buffer-live-p (get-buffer buffer-name)))
-         (buffer (get-buffer-create buffer-name)))
+         (buffer (get-buffer-create buffer-name))
+         ;; Save both default-directory AND calling buffer
+         (calling-buffer (current-buffer))
+         (saved-default-directory default-directory))
     (with-current-buffer buffer
       (setq horizontal-scroll-bar nil)
       (unless initializedp
@@ -1054,7 +1057,11 @@ SORT-FN: Sorting function for this widget (default nil, uses `completionist-sort
         (setq-local completionist-count
                     (completionist--calculate-count display-mode (selected-window)))
         (window-preserve-size)
-        (completionist--exhibit buffer)))))
+        (completionist--exhibit buffer)))
+    ;; Restore default-directory in the ORIGINAL calling buffer (if it still exists)
+    (when (buffer-live-p calling-buffer)
+      (with-current-buffer calling-buffer
+        (setq default-directory saved-default-directory)))))
 
 (defun completionist--advice (&rest args)
   "Advice for completion function, receiving ARGS."
