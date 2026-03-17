@@ -1,4 +1,4 @@
-#+title: Completionist: Persistent Completion Buffers for Dynamic UI
+#+title: Completionist: An API for Building Dynamic Autocompletion UI Widgets
 #+author: Overdr0ne
 #+language: en
 
