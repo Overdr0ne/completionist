@@ -2,25 +2,19 @@
 #+author: Overdr0ne
 #+language: en
 
-Completionist is a framework for building *persistent, filterable list interfaces* in Emacs.
-It is a fork of [[https://github.com/minad/vertico][Vertico]] that has diverged entirely in purpose.
+Completionist is a framework for building *persistent, filterable list interfaces* in Emacs. It is a fork of [[https://github.com/minad/vertico][Vertico]] that has diverged entirely in purpose.
 
 #+toc: headlines 3
 
 * What Completionist Is Not
 
-Completionist does *not* extend ~completing-read~ or the minibuffer. It has no integration
-with ~find-file~, ~switch-to-buffer~, ~execute-extended-command~, or any standard Emacs
-completion command. For that, use Vertico.
+Completionist does *not* extend ~completing-read~ or the minibuffer. It has no integration with ~find-file~, ~switch-to-buffer~, ~execute-extended-command~, or any standard Emacs completion command. For that, use Vertico.
 
 * What Completionist Is
 
-Completionist creates *persistent buffers* that act as filterable UI widgets. These buffers
-stay open, can be positioned anywhere in your frame, support multiple concurrent instances,
-and update automatically via hooks or timers.
+Completionist creates *persistent buffers* that act as filterable UI widgets. These buffers stay open, can be positioned anywhere in your frame, support multiple concurrent instances, and update automatically via hooks or timers.
 
-Think of it as a toolkit for building reactive side panels, tab bars, process monitors, or
-any dynamic list interface — not as a minibuffer completion replacement.
+Think of it as a toolkit for building reactive side panels, tab bars, process monitors, or any dynamic list interface — not as a minibuffer completion replacement.
 
 | Feature | Vertico | Completionist |
 |--------------------------+---------+---------------|
@@ -165,8 +159,7 @@ Specify via the ~display-mode~ parameter:
 - ~'grid~ — multi-column grid
 - ~(cons arrange-fn display-fn)~ — fully custom layout
 
-Extension keymaps (~completionist-flat-map~, ~completionist-grid-map~) are merged into the
-buffer's local keymap automatically, remapping arrow keys to layout-aware navigation.
+Extension keymaps (~completionist-flat-map~, ~completionist-grid-map~) are merged into the buffer's local keymap automatically, remapping arrow keys to layout-aware navigation.
 
 * Key Bindings
 
@@ -204,21 +197,16 @@ In flat mode, =←=/=→= navigate candidates. In grid mode, =←=/=→= move be
 (setq completionist-sort-function #'completionist-sort-history-length-alpha)
 #+end_src
 
-Available sort functions: ~completionist-sort-history-length-alpha~ (default),
-~completionist-sort-history-alpha~, ~completionist-sort-length-alpha~,
-~completionist-sort-alpha~, or ~nil~ to preserve collector order.
+Available sort functions: ~completionist-sort-history-length-alpha~ (default), ~completionist-sort-history-alpha~, ~completionist-sort-length-alpha~, ~completionist-sort-alpha~, or ~nil~ to preserve collector order.
 
-Each widget can have its own independent sort function and history via the ~SORT-FN~
-and ~HISTORY~ parameters.
+Each widget can have its own independent sort function and history via the ~SORT-FN~ and ~HISTORY~ parameters.
 
 * Extensions
 :properties:
 :custom_id: extensions
 :end:
 
-Extensions provide alternative display layouts. They are activated *per-buffer* via
-the ~display-mode~ parameter — never as global modes. Both are loaded automatically
-by ~completionist.el~.
+Extensions provide alternative display layouts. They are activated *per-buffer* via the ~display-mode~ parameter — never as global modes. Both are loaded automatically by ~completionist.el~.
 
 - [[file:extensions/completionist-flat.el][completionist-flat]]: Horizontal layout (~'flat~)
 - [[file:extensions/completionist-grid.el][completionist-grid]]: Grid/column layout (~'grid~)
@@ -245,8 +233,7 @@ Completionist is designed to be loaded as a local package:
 
 * Contributions
 
-Contributions welcome. This package is not part of GNU ELPA, so no FSF copyright
-assignment is required.
+Contributions welcome. This package is not part of GNU ELPA, so no FSF copyright assignment is required.
 
 * Credits and License
 
