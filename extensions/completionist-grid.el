@@ -1,4 +1,4 @@
-;;; completionist-grid.el --- Grid display for Vertico -*- lexical-binding: t -*-
+;;; completionist-grid.el --- Grid display for Completionist -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,7 +6,7 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Package-Requires: ((emacs "27.1") (completionist-lib "0.28"))
 ;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
@@ -26,17 +26,17 @@
 
 ;;; Commentary:
 
-;; This package is a Vertico extension providing a grid display.
+;; Provides grid/column display for Completionist persistent buffers.
+;; Activated per-buffer via the display-mode parameter of `completionist--complete':
 ;;
-;; The mode can be enabled globally or via `completionist-multiform-mode' per
-;; command or completion category. Alternatively the grid display can be
-;; toggled temporarily if `completionist-multiform-mode' is enabled:
+;;   (completionist--complete "prompt:" collector handler "*buf*" action nil 'grid)
 ;;
-;; (define-key completionist-map "\M-G" #'completionist-multiform-grid)
+;; `completionist-grid-map' is automatically merged into the buffer's local
+;; keymap, remapping arrow keys and scroll commands to grid-aware navigation.
 
 ;;; Code:
 
-(require 'completionist)
+(require 'completionist-lib)
 (eval-when-compile (require 'cl-lib))
 
 (defcustom completionist-grid-min-columns 2
@@ -73,7 +73,7 @@ When scrolling beyond this limit, candidates may be truncated."
     (define-key map [remap scroll-down-command] #'completionist-grid-scroll-down)
     (define-key map [remap scroll-up-command] #'completionist-grid-scroll-up)
     map)
-  "Additional keymap activated in grid mode.")
+  "Keymap for grid display mode, remapping arrow/scroll keys to grid navigation.")
 
 (defvar-local completionist-grid--columns completionist-grid-min-columns
   "Current number of grid columns.")
@@ -155,23 +155,6 @@ When scrolling beyond this limit, candidates may be truncated."
   (interactive "p")
   (completionist-grid-scroll-down (- (or n 1))))
 
-;;;###autoload
-(define-minor-mode completionist-grid-mode
-  "Grid display for Vertico."
-  :global t :group 'completionist
-  ;; Shrink current minibuffer window
-  (when-let (win (active-minibuffer-window))
-    (unless (frame-root-window-p win)
-      (window-resize win (- (window-pixel-height win)) nil nil 'pixelwise)))
-  (cond
-   (completionist-grid-mode
-    (add-to-list 'minor-mode-map-alist `(completionist--input . ,completionist-grid-map))
-    (advice-add #'completionist--arrange-candidates :override #'completionist-grid--arrange-candidates))
-   (t
-    (setq minor-mode-map-alist (delete `(completionist--input . ,completionist-grid-map) minor-mode-map-alist))
-    (advice-remove #'completionist--arrange-candidates #'completionist-grid--arrange-candidates))))
-
-;; Emacs 28: Do not show Vertico commands in M-X
 (dolist (sym '(completionist-grid-left completionist-grid-right
                completionist-grid-scroll-up completionist-grid-scroll-down))
   (put sym 'completion-predicate #'completionist--command-p))

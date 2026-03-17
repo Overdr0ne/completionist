@@ -6,7 +6,7 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Package-Requires: ((emacs "27.1") (completionist-lib "0.28"))
 ;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
@@ -26,21 +26,17 @@
 
 ;;; Commentary:
 
-;; This package is a Completionist extension providing a horizontal display.
+;; Provides horizontal flat display for Completionist persistent buffers.
+;; Activated per-buffer via the display-mode parameter of `completionist--complete':
 ;;
-;; The mode can be enabled globally or via `completionist-multiform-mode' per
-;; command or completion category. Alternatively the flat display can be
-;; toggled temporarily if `completionist-multiform-mode' is enabled:
+;;   (completionist--complete "prompt:" collector handler "*buf*" action nil 'flat)
 ;;
-;; (define-key completionist-map "\M-F" #'completionist-multiform-flat)
-;;
-;; The flat display can be made to look like `ido-mode' by setting
-;; `completionist-cycle' to t. See also the `completionist-flat-format'
-;; configuration variable for further tweaks.
+;; `completionist-flat-map' is automatically merged into the buffer's local
+;; keymap, remapping left/right arrow keys to candidate navigation.
 
 ;;; Code:
 
-(require 'completionist)
+(require 'completionist-lib)
 
 (defcustom completionist-flat-max-lines 1
   "Maximal number of lines to use."
@@ -66,7 +62,7 @@
     (define-key map [remap left-char] #'completionist-previous)
     (define-key map [remap right-char] #'completionist-next)
     map)
-  "Additional keymap activated in flat mode.")
+  "Keymap for flat display mode, remapping arrow keys to candidate navigation.")
 
 (defun completionist-flat--display-candidates (candidates)
   "Display CANDIDATES horizontally."
@@ -129,24 +125,6 @@
     (nreverse result)
     ;; (nreverse candidates)
     ))
-
-;;;###autoload
-(define-minor-mode completionist-flat-mode
-  "Flat, horizontal display for Completionist."
-  :global t :group 'completionist
-  ;; Shrink current minibuffer window
-  (when-let (win (active-minibuffer-window))
-    (unless (frame-root-window-p win)
-      (window-resize win (- (window-pixel-height win)) nil nil 'pixelwise)))
-  (cond
-   (completionist-flat-mode
-    (add-to-list 'minor-mode-map-alist `(completionist--input . ,completionist-flat-map))
-    (advice-add #'completionist--arrange-candidates :override #'completionist-flat--arrange-candidates)
-    (advice-add #'completionist--display-candidates :override #'completionist-flat--display-candidates))
-   (t
-    (setq minor-mode-map-alist (delete `(completionist--input . ,completionist-flat-map) minor-mode-map-alist))
-    (advice-remove #'completionist--arrange-candidates #'completionist-flat--arrange-candidates)
-    (advice-remove #'completionist--display-candidates #'completionist-flat--display-candidates))))
 
 (provide 'completionist-flat)
 ;;; completionist-flat.el ends here

@@ -1,240 +1,178 @@
-# Completionist - Persistent Completion Buffers for Dynamic UI
+# Completionist — Persistent Completion Buffers for Dynamic UI
 
-Completionist is a completion UI framework for building **persistent, filterable list interfaces** in Emacs. Unlike traditional minibuffer completion systems, Completionist creates persistent buffers that can be positioned anywhere in your frame and used as interactive UI components.
+Completionist is a framework for building **persistent, filterable list interfaces** in Emacs. It is a fork of [Vertico](https://github.com/minad/vertico) that has diverged entirely in purpose.
 
-## What is Completionist?
+## What Completionist Is Not
 
-Completionist evolved from Vertico but serves a fundamentally different purpose:
+Completionist does **not** extend `completing-read` or the minibuffer. It has no integration with `find-file`, `switch-to-buffer`, M-x, or any standard Emacs completion command. For that, use Vertico.
 
-- **Vertico**: Ephemeral minibuffer completion UI - appears during `completing-read`, then disappears
-- **Completionist**: Persistent buffer creation tool - builds filterable UI widgets that stay open and update dynamically
+## What Completionist Is
 
-## Why Completionist?
+Completionist creates **persistent buffers** that act as filterable UI widgets. These buffers stay open, can be positioned anywhere in your frame, support multiple concurrent instances, and update automatically via hooks or timers.
 
-Traditional completion frameworks (Vertico, Ivy, Helm) are excellent for temporary selection tasks but limited when you want to build persistent UI elements. Completionist fills this gap by providing:
+Think of it as a toolkit for building reactive side panels, tab bars, process monitors, or any dynamic list interface — not as a minibuffer completion replacement.
 
-- **Persistent buffers** that remain visible and interactive
-- **Multiple concurrent instances** - each buffer is independent
-- **Dynamic updates** - collectors run on each keystroke, buffers refresh via hooks
-- **Flexible positioning** - use `display-buffer` actions to place buffers anywhere
-- **Unified keybindings** - same navigation across all completionist buffers
-- **Programmatic control** - update buffers from hooks, timers, or events
-
-## Primary Use Case: Building Dynamic UI Widgets
-
-Completionist shines when you want to create reactive, filterable interfaces:
-
-### Example 1: Dynamic Tab Bar
+## Core API
 
 ```elisp
-(defun my-perspective-tabs ()
-  "Show all perspectives as a filterable tab bar at top of frame."
-  (interactive)
-  (completionist--complete
-    "persp:"                           ; Prompt
-    #'persp-names                      ; Collector: returns list of perspective names
-    #'persp-switch                     ; Handler: switch to selected perspective
-    " *perspectives*"                  ; Buffer name
-    '((display-buffer-in-side-window)  ; Display at top of frame
-      (window-height . 1)
-      (side . top)
-      (slot . 0))))
-
-;; Auto-update when perspectives change
-(add-hook 'persp-created-hook
-          (lambda ()
-            (when-let ((buf (get-buffer " *perspectives*")))
-              (completionist--exhibit buf))))
+(completionist--complete PROMPT COLLECTOR HANDLER BUFFER-NAME ACTION
+                         &optional UNFOCUSP DISPLAY-MODE UPDATE-HOOKS UPDATE-INTERVAL
+                         HISTORY SORT-FN)
 ```
 
-**Result**: A persistent 1-line window at the top showing all perspectives. Type to filter, press RET to switch. Updates automatically when perspectives are created/deleted.
+- **PROMPT**: String shown before the input area
+- **COLLECTOR**: Function returning a fresh list of candidate strings, called on each keystroke
+- **HANDLER**: Function called with the selected candidate on RET
+- **BUFFER-NAME**: Persistent buffer name — reused if it already exists
+- **ACTION**: `display-buffer` action controlling window placement and size
+- **UNFOCUSP**: If non-nil, don't steal focus from the current buffer
+- **DISPLAY-MODE**: `nil` (vertical, default), `'flat` (horizontal), `'grid`, or `(cons arrange-fn display-fn)` for custom layouts
+- **UPDATE-HOOKS**: List of hooks that trigger automatic refresh
+- **UPDATE-INTERVAL**: Seconds between timer-based refreshes, or nil
+- **HISTORY**: Initial history list for this widget
+- **SORT-FN**: Sorting function for this widget
 
-### Example 2: Live Process Monitor
+## Examples
+
+### Perspective tab bar
+
+```elisp
+(defun my-persp-tabs ()
+  (interactive)
+  (completionist--complete
+    "persp:"
+    #'persp-names
+    #'persp-switch
+    " *persps*"
+    '((display-buffer-in-side-window) (side . top) (window-height . 1))
+    t      ; unfocusp
+    'flat  ; horizontal layout
+    '(persp-created-hook persp-killed-hook persp-renamed-hook)))
+```
+
+### Live process monitor
 
 ```elisp
 (defun my-process-monitor ()
-  "Monitor running processes with live filtering."
   (interactive)
   (completionist--complete
     "processes:"
     (lambda ()
-      ;; Collector runs on every keystroke - always fresh data
-      (mapcar (lambda (proc)
-                (format "%-20s %s %s"
-                        (process-name proc)
-                        (process-status proc)
-                        (or (process-command proc) "")))
+      (mapcar (lambda (p) (format "%-20s %s" (process-name p) (process-status p)))
               (process-list)))
     (lambda (line)
-      ;; Handler: kill selected process
       (when (string-match "^\\(\\S-+\\)" line)
-        (signal-process (match-string 1 line) 'SIGTERM)))
+        (delete-process (get-process (match-string 1 line)))))
     "*processes*"
-    '((display-buffer-in-side-window)
-      (side . right)
-      (window-width . 40))))
+    '((display-buffer-in-side-window) (side . right) (window-width . 40))
+    t nil                      ; unfocusp, default display-mode
+    '(comint-exec-hook) 5.0))  ; hook + 5s timer
 ```
 
-**Result**: A persistent side window showing live process list. Filter by typing, press RET to kill selected process.
-
-### Example 3: Multiple Concurrent Buffers
+### Multiple concurrent widgets
 
 ```elisp
-;; Three independent completion buffers, each with different data
-(completionist--complete "Buffers:" #'buffer-list #'switch-to-buffer "*comp-buffers*"
-                         '((display-buffer-in-side-window) (side . left)))
+;; Left: buffer list (vertical)
+(completionist--complete "buffers:" (lambda () (mapcar #'buffer-name (buffer-list)))
+                         #'switch-to-buffer "*comp-buffers*"
+                         '((display-buffer-in-side-window) (side . left) (window-width . 30))
+                         t)
 
-(completionist--complete "Files:" (lambda () (directory-files default-directory))
-                         #'find-file "*comp-files*"
-                         '((display-buffer-in-side-window) (side . right)))
-
-(completionist--complete "Commands:" (lambda () (all-completions "" obarray 'commandp))
-                         #'command-execute "*comp-commands*"
-                         '((display-buffer-below-selected)))
+;; Top: perspective tabs (flat)
+(completionist--complete "persp:" #'persp-names #'persp-switch " *persps*"
+                         '((display-buffer-in-side-window) (side . top) (window-height . 1))
+                         t 'flat '(persp-created-hook persp-killed-hook))
 ```
 
-**Result**: Three filterable lists on screen simultaneously, each operating independently.
+## Automatic Updates
 
-## Core API
+| Strategy | When to use | Example |
+|----------|-------------|---------|
+| Hook-based | Data has change events | Perspectives, buffer list |
+| Timer-based | No hooks available | Clocks, system stats |
+| Hybrid (both) | Critical data | Processes, network connections |
 
-### `completionist--complete`
-
+Force a manual refresh:
 ```elisp
-(completionist--complete PROMPT COLLECTOR HANDLER BUFFER-NAME ACTION &optional UNFOCUSP)
+(when-let ((buf (get-buffer "*my-widget*")))
+  (completionist--exhibit buf))
 ```
 
-Creates or updates a persistent completion buffer.
+## Display Modes
 
-**Parameters:**
-- **PROMPT** (string): Text shown before the input area
-- **COLLECTOR** (function): Called on each keystroke, returns list of candidate strings
-- **HANDLER** (function): Called with selected candidate when user presses RET
-- **BUFFER-NAME** (string): Name for the persistent buffer (reused if exists)
-- **ACTION** (display-buffer action): Controls window placement and size
-- **UNFOCUSP** (optional bool): If non-nil, don't focus the completion buffer
+Specify via the `display-mode` parameter:
 
-**Returns:** Buffer object
+- `nil` — vertical list (default)
+- `'flat` — horizontal, one-line tab bar style
+- `'grid` — multi-column grid
+- `(cons arrange-fn display-fn)` — fully custom layout
 
-### `completionist--exhibit`
-
-```elisp
-(completionist--exhibit BUFFER)
-```
-
-Manually refresh a completion buffer's display. Useful for updating from hooks or timers.
+Extension keymaps (`completionist-flat-map`, `completionist-grid-map`) are merged into the buffer's local keymap automatically, remapping arrow keys to layout-aware navigation.
 
 ## Navigation Keybindings
 
-All completionist buffers use the same keybindings (defined in `completionist-map`):
+All completionist buffers share `completionist-map`:
 
-- `C-n` / `down` - Next candidate
-- `C-p` / `up` - Previous candidate
-- `M-<` - First candidate
-- `M->` - Last candidate
-- `C-v` - Page down
-- `M-v` - Page up
-- `M-{` - Previous group
-- `M-}` - Next group
-- `RET` - Execute handler with current candidate (or `completionist-execute` command)
-- `TAB` - Insert candidate into input area
-- `M-RET` - Exit with exact input (minibuffer compatibility)
-- `M-w` - Copy candidate to kill ring
+| Key | Action |
+|-----|--------|
+| `C-n` / `↓` | Next candidate |
+| `C-p` / `↑` | Previous candidate |
+| `M-<` | First candidate |
+| `M->` | Last candidate |
+| `C-v` | Page down |
+| `M-v` | Page up |
+| `RET` | Execute handler with selected candidate |
+| `TAB` | Insert candidate into input |
+| `C-q` | Quit window |
 
-## Display Control
-
-Use `display-buffer` actions to position completion buffers:
-
-```elisp
-;; Top of frame, 1 line tall
-'((display-buffer-in-side-window)
-  (window-height . 1)
-  (side . top)
-  (slot . 0))
-
-;; Right side, 40 columns wide
-'((display-buffer-in-side-window)
-  (window-width . 40)
-  (side . right)
-  (slot . 0))
-
-;; Bottom, 10 lines, preserve size
-'((display-buffer-in-side-window)
-  (window-height . 10)
-  (preserve-size . t)
-  (side . bottom))
-
-;; Reuse existing window or pop up
-'((display-buffer-reuse-window display-buffer-pop-up-window))
-```
+In flat mode, `←`/`→` navigate candidates. In grid mode, `←`/`→` move between columns.
 
 ## Configuration
 
-Completionist respects the same customization variables as Vertico:
-
 ```elisp
-;; Number of visible candidates
-(setq completionist-count 10)
-
-;; Enable cycling at list boundaries
-(setq completionist-cycle t)
-
-;; Scroll margin
+(setq completionist-count 10)               ; visible candidates
+(setq completionist-cycle t)                ; cycle at boundaries
 (setq completionist-scroll-margin 2)
-
-;; Default sorting
 (setq completionist-sort-function #'completionist-sort-history-length-alpha)
 ```
 
 ## Extensions
 
-Completionist includes extensions from Vertico that work with persistent buffers:
+Extensions provide alternative display layouts. They are activated per-buffer via the `display-mode` parameter — **never** as global modes.
 
-- **completionist-grid**: Grid/column layout
-- **completionist-flat**: Horizontal layout
-- **completionist-indexed**: Numeric candidate selection
-- **completionist-reverse**: Reverse candidate order
-- **completionist-mouse**: Mouse support
+- `completionist-flat` — horizontal layout (`'flat`)
+- `completionist-grid` — grid/column layout (`'grid`)
 
-Extensions can be enabled globally or toggled per buffer.
-
-## When to Use Completionist
-
-**Good use cases:**
-- Dynamic tab bars or mode lines
-- Live monitoring interfaces (processes, buffers, etc.)
-- Persistent command palettes
-- Filterable file/directory browsers
-- Any UI that needs to show a filterable, updating list
-
-**Not ideal for:**
-- One-off file/buffer selection (use Vertico/Ivy/Helm)
-- Traditional minibuffer completion (use `completing-read` with Vertico)
-- Static lists that don't update (just use a buffer with `occur` or similar)
+Both are loaded automatically by `completionist.el`.
 
 ## Relationship to Vertico
 
-Completionist is a fork of Vertico but has diverged in purpose:
+Completionist is a fork of Vertico but has diverged completely in purpose:
 
-- **Shares**: Core completion UI code, candidate formatting, highlighting, sorting
-- **Differs**: Not minibuffer-focused, persistent buffers, multiple instances, programmatic API
+| | Vertico | Completionist |
+|---|---------|---------------|
+| Target | `completing-read` / minibuffer | Persistent buffer widgets |
+| Lifetime | Ephemeral — closes after selection | Persistent — stays open |
+| Instances | One at a time | Multiple concurrent |
+| Updates | On user input only | Via hooks, timers, or manually |
+| API | Hooks into `completing-read` | `completionist--complete` |
 
-Think of Completionist as "Vertico for building UIs" rather than "Vertico replacement."
+Use Vertico for standard Emacs completion. Use Completionist for building UI.
 
 ## Installation
-
-Completionist is designed to be loaded as a local package:
 
 ```elisp
 (use-package completionist
   :straight (completionist :local-repo "path/to/completionist"
-                          :files ("*.el" "extensions/*.el")))
+                           :files ("*.el" "extensions/completionist-flat.el"
+                                   "extensions/completionist-grid.el")))
 ```
 
 ## License
 
-GNU General Public License v3.0 (inherited from Vertico)
+GNU General Public License v3.0 (inherited from Vertico).
 
 ## Credits
 
 Based on [Vertico](https://github.com/minad/vertico) by Daniel Mendler.
-Completionist modifications for persistent buffer support by Sam Cedarbaum (Overdr0ne).
+Completionist persistent buffer extensions by Overdr0ne.

@@ -24,6 +24,11 @@
 
 ;;; Code:
 
+(require 'perspective)
+(require 'completionist)
+(require 'completionist-grid)
+(require 'completionist-flat)
+
 (defun completionist-persp-switch ()
   "Show a focused perspective switcher as a flat tab bar at the top of the frame.
 Focuses the completion buffer so the user can navigate and select.

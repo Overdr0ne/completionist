@@ -33,15 +33,12 @@
 
 ;;; Code:
 
-(require 'seq)
+(require 'completionist-lib)
+(require 'completionist-flat)
+(require 'completionist-grid)
 (eval-when-compile
   (require 'cl-lib)
   (require 'subr-x))
-
-(defgroup completionist nil
-  "VERTical Interactive COmpletion."
-  :group 'convenience
-  :prefix "completionist-")
 
 (defcustom completionist-count-format (cons "%s " "(%s/%s)") ; (cons "%-6s " "%s/%s")
   "Format string used for the candidate count."
@@ -58,12 +55,6 @@
   "Format string used for the group title."
   :type '(choice (const :tag "No group titles" nil) string))
 
-(defcustom completionist-count 10
-  "Maximal number of candidates to show.
-This is calculated dynamically per buffer based on window size."
-  :type 'integer
-  :local 'permanent)
-
 (defcustom completionist-initial-index 0
   "Initial completionist index."
   :type 'integer)
@@ -79,16 +70,6 @@ The value should lie between 0 and completionist-count/2."
                  (const :tag "Shrink and grow" t)
                  (const :tag "Grow-only" grow-only)))
 
-(defcustom completionist-cycle nil
-  "Enable cycling for `completionist-next' and `completionist-previous'."
-  :type 'boolean
-  :local 'permanent)
-
-(defcustom completionist-multiline
-  (cons #("⤶" 0 1 (face completionist-multiline)) #("…" 0 1 (face completionist-multiline)))
-  "Replacements for multiline strings."
-  :type '(cons (string :tag "Newline") (string :tag "Truncation")))
-
 (defcustom completionist-sort-function #'completionist-sort-history-length-alpha
   "Default sorting function, used if no `display-sort-function' is specified."
   :type `(choice
@@ -102,23 +83,6 @@ The value should lie between 0 and completionist-count/2."
 (defcustom completionist-sort-override-function nil
   "Override sort function which overrides the `display-sort-function'."
   :type '(choice (const nil) function))
-
-(defgroup completionist-faces nil
-  "Faces used by Completionist."
-  :group 'completionist
-  :group 'faces)
-
-(defface completionist-multiline '((t :inherit shadow))
-  "Face used to highlight multiline replacement characters.")
-
-(defface completionist-group-title '((t :inherit shadow :slant italic))
-  "Face used for the title text of the candidate group headlines.")
-
-(defface completionist-group-separator '((t :inherit shadow :strike-through t))
-  "Face used for the separator lines of the candidate groups.")
-
-(defface completionist-current '((t :inherit highlight :extend t))
-  "Face used to highlight the currently selected candidate.")
 
 (defvar completionist-map
   (let ((map (make-composed-keymap nil minibuffer-local-map)))
@@ -142,17 +106,11 @@ The value should lie between 0 and completionist-count/2."
     map)
   "Completionist minibuffer keymap derived from `minibuffer-local-map'.")
 
-(defvar-local completionist--highlight #'identity
-  "Deferred candidate highlighting function.")
-
 (defvar-local completionist--history-hash nil
   "History hash table and corresponding base string.")
 
 (defvar-local completionist--history nil
   "Buffer-local history of selected candidates for this widget.")
-
-(defvar-local completionist--candidates-ov nil
-  "Overlay showing the candidates.")
 
 (defvar-local completionist--count-ov nil
   "Overlay showing the number of candidates.")
@@ -160,17 +118,8 @@ The value should lie between 0 and completionist-count/2."
 (defvar-local completionist--prompt-ov nil
   "Overlay showing the prompt.")
 
-(defvar-local completionist--index -1
-  "Index of current candidate or negative for prompt selection.")
-
 (defvar-local completionist--scroll 0
   "Scroll position.")
-
-(defvar-local completionist--input nil
-  "Cons of last minibuffer contents and point or t.")
-
-(defvar-local completionist--candidates nil
-  "List of candidates.")
 
 (defvar-local completionist--collector nil
   "The collection fetcher.")
@@ -181,12 +130,6 @@ The value should lie between 0 and completionist-count/2."
 (defvar-local completionist--base ""
   "Base string, which is concatenated with the candidate.")
 
-(defvar-local completionist--total 0
-  "Length of the candidate list `completionist--candidates'.")
-
-(defvar-local completionist--lock-candidate nil
-  "Lock-in current candidate.")
-
 (defvar-local completionist--lock-groups nil
   "Lock-in current group order.")
 
@@ -195,11 +138,6 @@ The value should lie between 0 and completionist-count/2."
 
 (defvar-local completionist--groups nil
   "List of current group titles.")
-
-(defvar-local completionist--default-missing nil
-  "Default candidate is missing from candidates list.")
-
-(defvar-local completionist--buffer nil)
 
 (defvar-local completionist--table nil)
 
@@ -525,42 +463,6 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
            (dolist (s state) (set (car s) (cdr s)))
            ))))))
 
-(defun completionist--display-string (str)
-  "Return display STR without display and invisible properties."
-  (let ((end (length str)) (pos 0) chunks)
-    (while (< pos end)
-      (let ((nextd (next-single-property-change pos 'display str end))
-            (display (get-text-property pos 'display str)))
-        (if (stringp display)
-            (progn (push display chunks) (setq pos nextd))
-          (while (< pos nextd)
-            (let ((nexti (next-single-property-change pos 'invisible str nextd)))
-              (unless (get-text-property pos 'invisible str)
-                (unless (and (= pos 0) (= nexti end)) ;; full string -> avoid allocation
-                  (push (substring str pos nexti) chunks)))
-              (setq pos nexti))))))
-    (if chunks (apply #'concat (nreverse chunks)) str)))
-
-(defun completionist--window-width ()
-  "Return minimum width of windows, which display the minibuffer."
-  (cl-loop for win in (get-buffer-window-list completionist--buffer) minimize (window-width win)))
-
-(defun completionist--truncate-multiline (cand max-width)
-  "Truncate multiline CAND to MAX-WIDTH."
-  (truncate-string-to-width
-   (thread-last cand
-                (replace-regexp-in-string "[\t ]+" " ")
-                (replace-regexp-in-string "[\t\n ]*\n[\t\n ]*" (car completionist-multiline))
-                (replace-regexp-in-string "\\`[\t\n ]+\\|[\t\n ]+\\'" ""))
-   max-width 0 nil (cdr completionist-multiline)))
-
-(defun completionist--format-candidate (cand prefix suffix index _start)
-  "Format CAND given PREFIX, SUFFIX and INDEX."
-  (setq cand (completionist--display-string (concat prefix cand suffix "\n")))
-  (when (= index completionist--index)
-    (add-face-text-property 0 (length cand) 'completionist-current 'append cand))
-  cand)
-
 (defun completionist--compute-scroll ()
   "Compute new scroll position."
   (let ((off (max (min completionist-scroll-margin (/ completionist-count 2)) 0))
@@ -713,19 +615,6 @@ If NO-REDISPLAY is non-nil, skip the redisplay call (for background updates)."
           ;; The separator space is at (point-max), user input ends at (1- (point-max))
           (goto-char (1- (point-max))))))))
 
-(defun completionist--allow-prompt-p ()
-  "Return t if prompt can be selected."
-  (or completionist--default-missing (memq minibuffer--require-match
-                                           '(nil confirm confirm-after-completion))))
-
-(defun completionist--goto (index)
-  "Go to candidate with INDEX."
-  (let ((prompt (completionist--allow-prompt-p)))
-    (setq completionist--index
-          (max (if (or prompt (= 0 completionist--total)) -1 0)
-               (min index (1- completionist--total)))
-          completionist--lock-candidate (or (>= completionist--index 0) prompt))))
-
 (defun completionist-first ()
   "Go to first candidate, or to the prompt when the first candidate is selected."
   (interactive)
@@ -745,22 +634,6 @@ If NO-REDISPLAY is non-nil, skip the redisplay call (for background updates)."
   "Go forward by N pages."
   (interactive "p")
   (completionist-scroll-down (- (or n 1))))
-
-(defun completionist-next (&optional n)
-  "Go forward N candidates."
-  (interactive "p")
-  (let ((index (+ completionist--index (or n 1))))
-    (completionist--goto
-     (cond
-      ((not completionist-cycle) index)
-      ((= completionist--total 0) -1)
-      ((completionist--allow-prompt-p) (1- (mod (1+ index) (1+ completionist--total))))
-      (t (mod index completionist--total))))))
-
-(defun completionist-previous (&optional n)
-  "Go backward N candidates."
-  (interactive "p")
-  (completionist-next (- (or n 1))))
 
 (defun completionist--match-p (input)
   "Return t if INPUT is a valid match."
@@ -923,20 +796,20 @@ DISPLAY-MODE can be:
   (overlay-put completionist--candidates-ov 'priority 0)
   (setq-local completion-auto-help nil
               completion-show-inline-help nil)
-  ;; Set display mode
+  ;; Set display mode and activate any extension-specific keymap
   (pcase display-mode
     ('flat
-     (require 'completionist-flat)
      (setq-local completionist--arrange-fn #'completionist-flat--arrange-candidates
-                 completionist--display-fn #'completionist-flat--display-candidates))
+                 completionist--display-fn #'completionist-flat--display-candidates)
+     (use-local-map (make-composed-keymap completionist-flat-map completionist-map)))
     ('grid
-     (require 'completionist-grid)
-     (setq-local completionist--arrange-fn #'completionist-grid--arrange-candidates))
+     (setq-local completionist--arrange-fn #'completionist-grid--arrange-candidates)
+     (use-local-map (make-composed-keymap completionist-grid-map completionist-map)))
     ((pred consp)
      (setq-local completionist--arrange-fn (car display-mode)
-                 completionist--display-fn (cdr display-mode)))
-    (_ nil)) ; Use defaults
-  (use-local-map completionist-map)
+                 completionist--display-fn (cdr display-mode))
+     (use-local-map completionist-map))
+    (_ (use-local-map completionist-map)))
   (add-hook 'pre-command-hook #'completionist--prepare nil 'local)
   (add-hook 'post-command-hook (apply-partially #'completionist--exhibit
                                                 completionist--buffer)
@@ -1077,10 +950,6 @@ SORT-FN: Sorting function for this widget (default nil, uses `completionist-sort
                                   completionist-scroll-down completionist-scroll-up completionist-exit completionist-insert
                                   completionist-exit-input completionist-save completionist-first completionist-last))
   (put sym 'completion-predicate #'completionist--command-p))
-
-(defun completionist--command-p (_sym buffer)
-  "Return non-nil if Completionist is active in BUFFER."
-  (buffer-local-value 'completionist--input buffer))
 
 (provide 'completionist)
 ;;; completionist.el ends here
