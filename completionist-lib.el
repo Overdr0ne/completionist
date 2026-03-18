@@ -122,8 +122,8 @@ If nil, use default overlay-based display.")
 
 (defvar-local completionist--format-fn nil
   "Buffer-local around-function for candidate formatting.
-When set, called as (funcall completionist--format-fn base-fn cand prefix suffix index start)
-where base-fn is `completionist--format-candidate' (cand prefix suffix index start).
+When set, called as (funcall completionist--format-fn base-fn cand prefix suffix
+index start) where base-fn is `completionist--format-candidate'.
 Used by extensions like `completionist-mouse' and `completionist-indexed'.")
 
 (defvar-local completionist--base ""

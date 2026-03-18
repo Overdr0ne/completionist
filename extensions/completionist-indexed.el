@@ -58,8 +58,9 @@
 (defvar-local completionist-indexed--max 0)
 
 (defun completionist-indexed--format-candidate (orig cand prefix suffix index start)
-  "Format candidate with numeric index prefix.
-ORIG is the base format function.  Other args match `completionist--format-candidate'."
+  "Format CAND with a numeric index prefix.
+ORIG is the base format function.
+PREFIX, SUFFIX, INDEX, START match `completionist--format-candidate'."
   (setq completionist-indexed--min start completionist-indexed--max index)
   (funcall orig cand
            (concat (propertize (format

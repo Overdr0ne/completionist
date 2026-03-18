@@ -59,8 +59,9 @@
     map))
 
 (defun completionist-mouse--format-candidate (orig cand prefix suffix index start)
-  "Format candidate with mouse properties.
-ORIG is the base format function.  Other args match `completionist--format-candidate'."
+  "Format CAND with mouse properties.
+ORIG is the base format function.
+PREFIX, SUFFIX, INDEX, START match `completionist--format-candidate'."
   (setq cand (funcall orig cand prefix suffix index start))
   (when (equal suffix "")
     (setq cand (concat (substring cand 0 -1)

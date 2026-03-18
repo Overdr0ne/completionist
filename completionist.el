@@ -27,7 +27,7 @@
 ;;; Commentary:
 
 ;; Completionist provides a performant and minimalistic vertical completion UI
-;; based on the default completion system. By reusing the built-in
+;; based on the default completion system.  By reusing the built-in
 ;; facilities, Completionist achieves full compatibility with built-in Emacs
 ;; completion commands and completion tables.
 
@@ -385,7 +385,7 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
     (completionist--update completionist--buffer)))
 
 (defun completionist--update (buffer &optional interruptible)
-  "Update state, optionally INTERRUPTIBLE."
+  "Update state in BUFFER, optionally INTERRUPTIBLE."
   (with-current-buffer buffer
     (let* ((content (completionist-contents-no-properties))
            (pt (min (- (point) (point-min)) (length content)))
@@ -484,7 +484,7 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
                (apply #'concat (and lines "\n") lines)))
 
 (defun completionist--display-candidates (lines)
-  "Display candidates using buffer-local or default function."
+  "Display LINES using buffer-local or default function."
   (funcall (or completionist--display-fn #'completionist--display-candidates-default) lines))
 
 
@@ -515,7 +515,7 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
 
 
 (defun completionist--exhibit (buf &optional no-redisplay)
-  "Exhibit completion UI.
+  "Exhibit completion UI in BUF.
 If NO-REDISPLAY is non-nil, skip the redisplay call (for background updates)."
   (when (and (buffer-live-p buf)
              ;; Only update if buffer is actually displayed in a window
@@ -578,12 +578,9 @@ to maintain proper overlay positioning."
         (error "Cannot modify the buffer separator")))))
 
 (defun completionist--setup (&optional prompt collector handler display-mode)
-  "Setup completion UI.
-DISPLAY-MODE can be:
-  nil          - default vertical layout
-  'flat        - horizontal flat layout
-  'grid        - grid layout
-  (cons arrange-fn display-fn) - custom functions"
+  "Set up completion UI with PROMPT, COLLECTOR, HANDLER, and DISPLAY-MODE.
+DISPLAY-MODE can be nil (default vertical), `flat', `grid', `reverse',
+`indexed', or a cons of (ARRANGE-FN . DISPLAY-FN) for a custom layout."
   (setq-local completionist-cycle t)
   (setq mode-line-format nil)
   ;; Ensure buffer is empty and cursor at start
@@ -680,9 +677,9 @@ DISPLAY-MODE can be:
   (setq completionist--update-hook-removers nil))
 
 (defun completionist--setup-updates (buffer update-hooks update-interval)
-  "Setup automatic updates for BUFFER.
-UPDATE-HOOKS: List of hooks to attach to.
-UPDATE-INTERVAL: Seconds between updates, or nil for no timer."
+  "Set up automatic updates for BUFFER.
+UPDATE-HOOKS is a list of hooks to attach to.
+UPDATE-INTERVAL is seconds between updates, or nil for no timer."
   (with-current-buffer buffer
     ;; Clean up any existing updates first
     (completionist--cleanup-updates)
@@ -725,17 +722,18 @@ UPDATE-INTERVAL: Seconds between updates, or nil for no timer."
 
 (defun completionist--complete (prompt collector handler buffer-name action &optional unfocusp display-mode update-hooks update-interval history sort-fn)
   "Create or update a persistent completion buffer.
-PROMPT: String to display before input area.
-COLLECTOR: Function returning list of candidate strings.
-HANDLER: Function called with selected candidate.
-BUFFER-NAME: Name for the persistent buffer.
-ACTION: display-buffer action controlling window placement.
-UNFOCUSP: If non-nil, don't focus the completion buffer.
-DISPLAY-MODE: Display style - nil (default vertical), 'flat, 'grid, or (cons arrange-fn display-fn).
-UPDATE-HOOKS: List of hooks to trigger automatic refresh (e.g., '(persp-created-hook persp-killed-hook)).
-UPDATE-INTERVAL: Seconds between automatic refreshes, or nil for no timer.
-HISTORY: Initial history list for this widget (default nil).
-SORT-FN: Sorting function for this widget (default nil, uses `completionist-sort-function')."
+PROMPT is a string displayed before the input area.
+COLLECTOR is a function returning a fresh list of candidate strings.
+HANDLER is a function called with the selected candidate on RET.
+BUFFER-NAME is the persistent buffer name (reused if it already exists).
+ACTION is a `display-buffer' action controlling window placement and size.
+UNFOCUSP, if non-nil, prevents focusing the completion buffer.
+DISPLAY-MODE controls the layout: nil (default vertical), `flat', `grid',
+`reverse', `indexed', or a cons of (ARRANGE-FN . DISPLAY-FN).
+UPDATE-HOOKS is a list of hooks that trigger automatic refresh.
+UPDATE-INTERVAL is seconds between timer-based refreshes, or nil.
+HISTORY is an initial history list for this widget.
+SORT-FN is a per-widget sort function (nil uses `completionist-sort-function')."
   (let* ((window-min-height 1)
          (displayer (if unfocusp 'display-buffer 'pop-to-buffer))
          (initializedp (buffer-live-p (get-buffer buffer-name)))
