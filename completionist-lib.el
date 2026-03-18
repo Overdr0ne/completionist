@@ -87,7 +87,7 @@ This is calculated dynamically per buffer based on window size."
   "Index of current candidate or negative for prompt selection.")
 
 (defvar-local completionist--input nil
-  "Cons of last minibuffer contents and point or t.")
+  "Cons of last buffer contents and point or t.")
 
 (defvar-local completionist--candidates nil
   "List of candidates.")
@@ -148,7 +148,7 @@ Used by extensions like `completionist-mouse' and `completionist-indexed'.")
     (if chunks (apply #'concat (nreverse chunks)) str)))
 
 (defun completionist--window-width ()
-  "Return minimum width of windows, which display the minibuffer."
+  "Return minimum width of windows displaying the completionist buffer."
   (cl-loop for win in (get-buffer-window-list completionist--buffer) minimize (window-width win)))
 
 (defun completionist--truncate-multiline (cand max-width)
@@ -168,9 +168,8 @@ Used by extensions like `completionist-mouse' and `completionist-indexed'.")
   cand)
 
 (defun completionist--allow-prompt-p ()
-  "Return t if prompt can be selected."
-  (or completionist--default-missing (memq minibuffer--require-match
-                                           '(nil confirm confirm-after-completion))))
+  "Return t if prompt (no candidate selected) can be selected."
+  (or completionist--default-missing t))
 
 (defun completionist--goto (index)
   "Go to candidate with INDEX."
@@ -222,7 +221,6 @@ Used by extensions like `completionist-mouse' and `completionist-indexed'.")
         (completionist--remove-face 0 (length cand) 'completions-common-part cand)
         (concat completionist--base
                 (if hl (car (funcall completionist--highlight (list cand))) cand))))
-     ((and (equal content "") (or (car-safe minibuffer-default) minibuffer-default)))
      (t content))))
 
 (defun completionist-insert ()

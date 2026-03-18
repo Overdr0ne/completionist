@@ -41,7 +41,6 @@
 (defvar completionist-reverse-map
   (let ((map (make-sparse-keymap)))
     (define-key map [remap beginning-of-buffer] #'completionist-last)
-    (define-key map [remap minibuffer-beginning-of-buffer] #'completionist-last)
     (define-key map [remap end-of-buffer] #'completionist-first)
     (define-key map [remap scroll-down-command] #'completionist-scroll-up)
     (define-key map [remap scroll-up-command] #'completionist-scroll-down)

@@ -81,7 +81,7 @@ Calls ORIG with ARGS otherwise."
         (if (or (< completionist--index completionist-indexed--min)
                 (> completionist--index completionist-indexed--max)
                 (= completionist--total 0))
-            (minibuffer-message "Out of range")
+            (message "Out of range")
           (funcall orig)))
     (apply orig args)))
 

@@ -91,13 +91,9 @@
                    (length (plist-get completionist-flat-format :left))
                    (length (plist-get completionist-flat-format :separator))
                    (length (plist-get completionist-flat-format :right))
-                   ;; (length (plist-get completionist-flat-format :ellipsis))
-                   (car (posn-col-row (posn-at-point (1- (point-max)))))
-                   ))
-         (result) (wrapped))
-    (while (and candidates
-                ;; (not (eq wrapped (car candidates)))
-                (> width 0) (> count 0))
+                   (car (posn-col-row (posn-at-point (1- (point-max)))))))
+         result)
+    (while (and candidates (> width 0) (> count 0))
       (let ((cand (car candidates)))
         (setq cand (car (funcall completionist--highlight (list cand))))
         (when (string-match-p "\n" cand)
@@ -112,19 +108,8 @@
               width (- width (string-width cand) (length (plist-get completionist-flat-format :separator))))
         (when (or (not result) (> width 0))
           (push cand result))
-        (pop candidates)
-        ;; (when (and completionist-cycle (not candidates))
-        ;;   (setq candidates completionist--candidates
-        ;;         index 0
-        ;;         wrapped (nth completionist--index completionist--candidates)))
-        ))
-    ;; (when (if wrapped
-    ;;           (> completionist--total (- completionist-count count))
-    ;;         (and (/= completionist--total 0) (/= index completionist--total)))
-    ;;   (push (plist-get completionist-flat-format :ellipsis) result))
-    (nreverse result)
-    ;; (nreverse candidates)
-    ))
+        (pop candidates)))
+    (nreverse result)))
 
 (provide 'completionist-flat)
 ;;; completionist-flat.el ends here

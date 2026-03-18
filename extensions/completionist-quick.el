@@ -1,4 +1,4 @@
-;;; completionist-quick.el --- Quick keys for Vertico -*- lexical-binding: t -*-
+;;; completionist-quick.el --- Quick keys for Completionist -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -26,13 +26,10 @@
 
 ;;; Commentary:
 
-;; This package is a Vertico extension, which prefixes candidates with
-;; quick keys. Typing these quick keys allows you to select the
-;; candidate in front of them. This is designed to be a faster
-;; alternative to selecting a candidate with `completionist-next' and
-;; `completionist-previous'.
-;; (define-key completionist-map "\M-q" #'completionist-quick-insert)
-;; (define-key completionist-map "\C-q" #'completionist-quick-exit)
+;; Prefixes candidates with quick keys so you can jump to any visible
+;; candidate with one or two keystrokes.  Bind `completionist-quick-jump',
+;; `completionist-quick-exit', or `completionist-quick-insert' to keys
+;; in `completionist-map' to activate.
 
 ;;; Code:
 
@@ -123,7 +120,7 @@ TWO is non-nil if two keys should be displayed."
   "Jump to candidate using quick keys."
   (interactive)
   (if (= completionist--total 0)
-      (and (minibuffer-message "No match") nil)
+      (and (message "No match") nil)
     (let ((idx (completionist-quick--read)))
       (when (consp idx) (setq idx (completionist-quick--read (car idx))))
       (when idx (setq completionist--index idx)))))
@@ -142,7 +139,7 @@ TWO is non-nil if two keys should be displayed."
   (when (completionist-quick-jump)
     (completionist-insert)))
 
-;; Emacs 28: Do not show Vertico commands in M-X
+;; Emacs 28: Do not show Completionist commands in M-X
 (dolist (sym '(completionist-quick-jump completionist-quick-exit completionist-quick-insert))
   (put sym 'completion-predicate #'completionist--command-p))
 

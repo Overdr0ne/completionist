@@ -84,9 +84,8 @@ The value should lie between 0 and completionist-count/2."
   :type '(choice (const nil) function))
 
 (defvar completionist-map
-  (let ((map (make-composed-keymap nil minibuffer-local-map)))
+  (let ((map (make-sparse-keymap)))
     (define-key map [remap beginning-of-buffer] #'completionist-first)
-    (define-key map [remap minibuffer-beginning-of-buffer] #'completionist-first)
     (define-key map [remap end-of-buffer] #'completionist-last)
     (define-key map [remap scroll-down-command] #'completionist-scroll-down)
     (define-key map [remap scroll-up-command] #'completionist-scroll-up)
@@ -96,14 +95,13 @@ The value should lie between 0 and completionist-count/2."
     (define-key map [remap previous-line-or-history-element] #'completionist-previous)
     (define-key map [remap backward-paragraph] #'completionist-previous-group)
     (define-key map [remap forward-paragraph] #'completionist-next-group)
-    (define-key map [remap exit-minibuffer] #'completionist-execute)
+    (define-key map "\r" #'completionist-execute)
     (define-key map [remap kill-ring-save] #'completionist-save)
-    (define-key map "\M-\r" #'completionist-exit-input)
     (define-key map "\t" #'completionist-insert)
     (define-key map "\C-l" #'completionist-insert)
     (define-key map "\C-q" #'quit-window)
     map)
-  "Completionist minibuffer keymap derived from `minibuffer-local-map'.")
+  "Keymap for completionist buffers.")
 
 (defvar-local completionist--history-hash nil
   "History hash table and corresponding base string.")
@@ -130,8 +128,6 @@ The value should lie between 0 and completionist-count/2."
 
 (defvar-local completionist--table nil)
 
-(defvar-local completionist--predicate nil)
-
 (defvar-local completionist--prompt "")
 
 (defvar-local completionist--handler nil)
@@ -150,14 +146,9 @@ If nil, use `completionist-sort-function'.")
 (defvar-local completionist--update-idle-timer nil
   "Idle timer for deferred updates from hooks.")
 
-(defun completionist-prompt-end ()
-  1)
-
-
 (defun completionist--history-hash ()
-  "Recompute history hash table and return it."
-  (or nil
-   ;; (and (equal (car completionist--history-hash) completionist--base) (cdr completionist--history-hash))
+  "Return cached or recomputed history hash table."
+  (or (and (equal (car completionist--history-hash) completionist--base) (cdr completionist--history-hash))
       (let* ((base completionist--base)
              (base-size (length base))
              (hist completionist--history)
@@ -167,7 +158,6 @@ If nil, use `completionist-sort-function'.")
                            (and (>= (length elem) base-size)
                                 (eq t (compare-strings base 0 base-size elem 0 base-size))))
                    (let ((file-sep nil))
-                     ;; Drop base string from history elements & special file handling.
                      (when (or (> base-size 0) file-sep)
                        (setq elem (substring elem base-size (and file-sep (1+ file-sep)))))
                      (unless (gethash elem hash) (puthash elem index hash)))))
@@ -299,28 +289,23 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
                ;; See also marginalia.el which has the same issue.
                (bounds (or (condition-case nil
                                (completion-boundaries
-                                before completionist--table
-                                completionist--predicate after)
+                                before completionist--table nil after)
                              (t (cons 0 (length after))))))
                (field (substring content (car bounds) (+ pt (cdr bounds))))
-               ;; `minibuffer-completing-file-name' has been obsoleted by the completion category
                (completing-file (eq 'file (completionist--metadata-get 'category)))
                (`(,all . ,hl)
                 (completionist--all-completions
-                 content completionist--table
-                 completionist--predicate pt completionist--metadata)
-                )
+                 content completionist--table nil pt completionist--metadata))
                (base (or (when-let (z (last all)) (prog1 (cdr z) (setcdr z nil))) 0))
                (completionist--base (substring content 0 base))
-               (def (or (car-safe minibuffer-default) minibuffer-default))
+               (def nil)
                (groups) (def-missing) (lock))
     ;; Filter the ignored file extensions. We cannot use modified predicate for this filtering,
     ;; since this breaks the special casing in the `completion-file-name-table' for `file-exists-p'
     ;; and `file-directory-p'.
     (when completing-file (setq all (completionist--filter-files all)))
     ;; Sort using the `display-sort-function' or the Completionist sort functions
-    ;; (setq all (delete-consecutive-dups (funcall (or (completionist--sort-function) #'identity) all)))
-    (setq all (delete-consecutive-dups (funcall  (completionist--sort-function) all)))
+    (setq all (delete-consecutive-dups (funcall (or (completionist--sort-function) #'identity) all)))
     ;; Move special candidates: "field" appears at the top, before "field/", before default value
     (when (stringp def)
       (setq all (completionist--move-to-front def all)))
@@ -349,11 +334,7 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
       ;;   after the boundary is empty, including content after point.
       (completionist--index . ,(or lock
                                    (if (or def-missing (not all)
-                                           (and (= (length completionist--base) (length content))
-                                                t
-                                                ;; (test-completion content completionist--table
-                                                ;;                  completionist--predicate)
-                                                ))
+                                           (= (length completionist--base) (length content)))
                                        -1 0))))))
 
 
@@ -406,22 +387,17 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
 (defun completionist--update (buffer &optional interruptible)
   "Update state, optionally INTERRUPTIBLE."
   (with-current-buffer buffer
-    (let* (
-           ;; (pt (max 0 (- (point) (completionist-prompt-end))))
-           (pt (- (point) (point-min)))
-           (content (completionist-contents-no-properties))
+    (let* ((content (completionist-contents-no-properties))
+           (pt (min (- (point) (point-min)) (length content)))
            (input (cons content pt)))
       (setq completionist--table (funcall completionist--collector))
-      (unless (or (and interruptible (input-pending-p))
-                  ;; (equal completionist--input input)
-                  )
-        ;; Redisplay the minibuffer such that the input becomes immediately
-        ;; visible before the expensive candidate recomputation (Issue #89).
+      (unless (and interruptible (input-pending-p))
+        ;; Redisplay the buffer so input becomes immediately visible
+        ;; before the expensive candidate recomputation (Issue #89).
         ;; Do not redisplay during initialization, since this leads to flicker.
         (when (and interruptible (consp completionist--input)) (redisplay))
         (pcase (let ((completionist--metadata (completion-metadata (substring content 0 pt)
-                                                                   completionist--table
-                                                                   completionist--predicate)))
+                                                                   completionist--table nil)))
                  ;; If Tramp is used, do not compute the candidates in an interruptible fashion,
                  ;; since this will break the Tramp password and user name prompts (See #23).
                  (if (or (not interruptible)
@@ -430,12 +406,9 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
                      (completionist--recompute pt content)
                    (let ((non-essential t))
                      (while-no-input (completionist--recompute pt content)))))
-          ;; ('nil (abort-recursive-edit))
-          (
-           (and state (pred consp))
+          ((and state (pred consp))
            (setq completionist--input input)
-           (dolist (s state) (set (car s) (cdr s)))
-           ))))))
+           (dolist (s state) (set (car s) (cdr s)))))))))
 
 (defun completionist--compute-scroll ()
   "Compute new scroll position."
@@ -508,9 +481,7 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
   ;; Position at point-max (after user input)
   (move-overlay completionist--candidates-ov (point-max) (point-max))
   (overlay-put completionist--candidates-ov 'after-string
-               (apply #'concat (and lines "\n") lines))
-  ;; (completionist--resize-window (length lines))
-  )
+               (apply #'concat (and lines "\n") lines)))
 
 (defun completionist--display-candidates (lines)
   "Display candidates using buffer-local or default function."
@@ -542,13 +513,6 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
   (overlay-put completionist--prompt-ov 'before-string
                (if completionist-prompt-format (completionist--format-prompt) "")))
 
-(defun completionist--prompt-selection ()
-  "Highlight the prompt if selected."
-  (let ((inhibit-modification-hooks t))
-    (if (and (< completionist--index 0) (completionist--allow-prompt-p))
-        (add-face-text-property (completionist-prompt-end) (point-max) 'completionist-current 'append)
-      (completionist--remove-face (completionist-prompt-end) (point-max) 'completionist-current))))
-
 
 (defun completionist--exhibit (buf &optional no-redisplay)
   "Exhibit completion UI.
@@ -570,28 +534,6 @@ If NO-REDISPLAY is non-nil, skip the redisplay call (for background updates)."
           (goto-char (1- (point-max))))))))
 
 
-(defun completionist--match-p (input)
-  "Return t if INPUT is a valid match."
-  (or (memq minibuffer--require-match '(nil confirm-after-completion))
-      (equal "" input) ;; Null completion, returns default value
-      (test-completion input completionist--table completionist--predicate)
-      (if (eq minibuffer--require-match 'confirm)
-          (eq (ignore-errors (read-char "Confirm")) 13)
-        (and (minibuffer-message "Match required") nil))))
-
-(defun completionist-exit (&optional arg)
-  "Exit minibuffer with current candidate or input if prefix ARG is given."
-  (interactive "P")
-  (when (and (not arg) (>= completionist--index 0))
-    (completionist-insert))
-  (when (completionist--match-p (completionist-contents-no-properties))
-    (exit-minibuffer)))
-
-
-(defun completionist-exit-input ()
-  "Exit minibuffer with input."
-  (interactive)
-  (completionist-exit t))
 
 (defun completionist-save ()
   "Save current candidate to kill ring."
@@ -648,16 +590,13 @@ DISPLAY-MODE can be:
     (erase-buffer)
     ;; Insert a separator space to separate input area from candidates overlay
     ;; This ensures point-max != point-min so overlays have distinct positions
-    ;; Make it read-only, invisible, and intangible to protect it from user modifications
+    ;; Make it read-only and invisible to protect it from user modifications
     (let ((separator-pos (point)))
       (insert " ")
       (put-text-property separator-pos (point) 'read-only t)
       (put-text-property separator-pos (point) 'invisible t)
-      (put-text-property separator-pos (point) 'cursor-intangible t)
       (put-text-property separator-pos (point) 'rear-nonsticky t)))
   (goto-char (point-min))
-  ;; Enable cursor-intangible-mode to prevent cursor from moving past separator
-  (cursor-intangible-mode 1)
   ;; Add protection against accidental separator deletion
   (add-hook 'before-change-functions #'completionist--protect-separator nil 'local)
   (setq completionist--buffer (current-buffer)
@@ -670,8 +609,6 @@ DISPLAY-MODE can be:
         completionist--prompt-ov (make-overlay (point-min) (point-min))
         ;; Candidates overlay at point-max so it appears AFTER cursor/input
         completionist--candidates-ov (make-overlay (point-max) (point-max) nil t t))
-  ;; Set minibuffer--require-match as buffer-local to avoid issues with minibuffer
-  (setq-local minibuffer--require-match nil)
   ;; Priority controls order of overlays at same position
   ;; For before-strings at the same position, lower priority appears first
   ;; We want: COUNT (if present) → PROMPT → [cursor/input] → CANDIDATES
@@ -830,19 +767,11 @@ SORT-FN: Sorting function for this widget (default nil, uses `completionist-sort
       (with-current-buffer calling-buffer
         (setq default-directory saved-default-directory)))))
 
-(defun completionist--advice (&rest args)
-  "Advice for completion function, receiving ARGS."
-  (minibuffer-with-setup-hook #'completionist--setup (apply args)))
-
-;;;###autoload
-(define-minor-mode completionist-mode
-  "VERTical Interactive COmpletion."
-  :global t :group 'completionist)
 
 ;; Emacs 28: Do not show Completionist commands in M-X
 (dolist (sym '(completionist-next completionist-next-group completionist-previous completionist-previous-group
-                                  completionist-scroll-down completionist-scroll-up completionist-exit completionist-insert
-                                  completionist-exit-input completionist-save completionist-first completionist-last))
+                                  completionist-scroll-down completionist-scroll-up completionist-insert
+                                  completionist-save completionist-first completionist-last))
   (put sym 'completion-predicate #'completionist--command-p))
 
 (provide 'completionist)
