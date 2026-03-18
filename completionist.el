@@ -550,6 +550,7 @@ If NO-REDISPLAY is non-nil, skip the redisplay call (for background updates)."
         (hand completionist--handler)
         (buf completionist--buffer))
     (push cand completionist--history)
+    (setq completionist--history-hash nil)  ; invalidate cache so sort reflects new history
     ;; Clear user input but preserve the invisible separator space at end
     (let ((inhibit-read-only t))
       (delete-region (point-min) (max (point-min) (1- (point-max)))))
