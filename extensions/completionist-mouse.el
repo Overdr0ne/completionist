@@ -2,8 +2,8 @@
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
-;; Author: Daniel Mendler <mail@daniel-mendler.de>
-;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
+;; Author: Overdr0ne <scmorris.dev@gmail.com>
+;; Maintainer: Overdr0ne <scmorris.dev@gmail.com>
 ;; Created: 2021
 ;; Version: 0.1
 ;; Package-Requires: ((emacs "27.1") (completionist-lib "0.28"))
