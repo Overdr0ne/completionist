@@ -6,7 +6,7 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Package-Requires: ((emacs "27.1") (completionist-lib "0.28"))
 ;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
@@ -26,11 +26,19 @@
 
 ;;; Commentary:
 
-;; This package is a Completionist extension, which adds mouse support.
+;; Mouse support for Completionist persistent buffers.
+;; Activated automatically for every completionist buffer — no global mode needed.
+;;
+;; Provides:
+;;   - mouse-1 click to execute handler on a candidate
+;;   - mouse-3 click to insert a candidate into the input area
+;;   - scroll-wheel navigation via mwheel
+;;
+;; Mouse support is wired in by `completionist--setup'.  No user action required.
 
 ;;; Code:
 
-(require 'completionist)
+(require 'completionist-lib)
 
 (defface completionist-mouse
   '((t :inherit highlight))
@@ -46,13 +54,13 @@
                                   (completionist-execute))))
     (define-key map [mouse-3] (lambda ()
                                 (interactive)
-                                (with-selected-window (active-minibuffer-window)
-                                  (let ((completionist--index index))
-                                    (completionist-insert)))))
+                                (let ((completionist--index index))
+                                  (completionist-insert))))
     map))
 
 (defun completionist-mouse--format-candidate (orig cand prefix suffix index start)
-  "Format candidate, see `completionist--format-candidate' for arguments."
+  "Format candidate with mouse properties.
+ORIG is the base format function.  Other args match `completionist--format-candidate'."
   (setq cand (funcall orig cand prefix suffix index start))
   (when (equal suffix "")
     (setq cand (concat (substring cand 0 -1)
@@ -73,24 +81,10 @@
   "Scroll down by N lines."
   (completionist-mouse--scroll-up (- n)))
 
-(defun completionist-mouse--setup (_prompt _collector _handler &optional _display-mode)
-  "Setup mouse scrolling."
+(defun completionist-mouse--setup ()
+  "Setup mouse scrolling for the current completionist buffer."
   (setq-local mwheel-scroll-up-function #'completionist-mouse--scroll-up
               mwheel-scroll-down-function #'completionist-mouse--scroll-down))
-
-;;;###autoload
-(define-minor-mode completionist-mouse-mode
-  "Mouse support for Completionist."
-  :global t :group 'completionist
-  (cond
-   (completionist-mouse-mode
-    (advice-add #'completionist--format-candidate
-                :around #'completionist-mouse--format-candidate)
-    (advice-add #'completionist--setup
-                :after #'completionist-mouse--setup))
-   (t
-    (advice-remove #'completionist--format-candidate #'completionist-mouse--format-candidate)
-    (advice-remove #'completionist--setup #'completionist-mouse--setup))))
 
 (provide 'completionist-mouse)
 ;;; completionist-mouse.el ends here

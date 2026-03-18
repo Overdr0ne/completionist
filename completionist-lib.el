@@ -103,6 +103,32 @@ This is calculated dynamically per buffer based on window size."
 
 (defvar-local completionist--buffer nil)
 
+(defvar-local completionist--arrange-fn nil
+  "Buffer-local function to arrange candidates.
+If nil, use default vertical layout.")
+
+(defvar-local completionist--display-fn nil
+  "Buffer-local function to display candidates.
+If nil, use default overlay-based display.")
+
+(defvar-local completionist--lock-groups nil
+  "Lock-in current group order.")
+
+(defvar-local completionist--all-groups nil
+  "List of all group titles.")
+
+(defvar-local completionist--groups nil
+  "List of current group titles.")
+
+(defvar-local completionist--format-fn nil
+  "Buffer-local around-function for candidate formatting.
+When set, called as (funcall completionist--format-fn base-fn cand prefix suffix index start)
+where base-fn is `completionist--format-candidate' (cand prefix suffix index start).
+Used by extensions like `completionist-mouse' and `completionist-indexed'.")
+
+(defvar-local completionist--base ""
+  "Base string, which is concatenated with the candidate.")
+
 ;; Utility functions
 
 (defun completionist--display-string (str)
@@ -173,6 +199,111 @@ This is calculated dynamically per buffer based on window size."
 (defun completionist--command-p (_sym buffer)
   "Return non-nil if Completionist is active in BUFFER."
   (buffer-local-value 'completionist--input buffer))
+
+(defun completionist-contents-no-properties ()
+  "Get buffer contents, excluding the invisible separator space."
+  (with-current-buffer completionist--buffer
+    (buffer-substring-no-properties (point-min) (max (point-min) (1- (point-max))))))
+
+(defun completionist--remove-face (beg end face &optional obj)
+  "Remove FACE between BEG and END from OBJ."
+  (while (< beg end)
+    (let ((next (next-single-property-change beg 'face obj end)))
+      (when-let (val (get-text-property beg 'face obj))
+        (put-text-property beg next 'face (remq face (if (listp val) val (list val))) obj))
+      (setq beg next))))
+
+(defun completionist--candidate (&optional hl)
+  "Return current candidate string with optional highlighting if HL is non-nil."
+  (let ((content (substring (or (car-safe completionist--input) (completionist-contents-no-properties)))))
+    (cond
+     ((>= completionist--index 0)
+      (let ((cand (substring (nth completionist--index completionist--candidates))))
+        (completionist--remove-face 0 (length cand) 'completions-common-part cand)
+        (concat completionist--base
+                (if hl (car (funcall completionist--highlight (list cand))) cand))))
+     ((and (equal content "") (or (car-safe minibuffer-default) minibuffer-default)))
+     (t content))))
+
+(defun completionist-insert ()
+  "Insert current candidate into the input area."
+  (interactive)
+  (when (> completionist--total 0)
+    (let ((completionist--index (max 0 completionist--index))
+          (inhibit-read-only t))
+      (delete-region (point-min) (max (point-min) (1- (point-max))))
+      (insert (completionist--candidate)))
+    (completionist-contents-no-properties)))
+
+(defun completionist--cycle (list n)
+  "Rotate LIST to position N."
+  (nconc (copy-sequence (nthcdr n list)) (seq-take list n)))
+
+(defun completionist-next-group (&optional n)
+  "Cycle N groups forward.
+When the prefix argument is 0, the group order is reset."
+  (interactive "p")
+  (when (cdr completionist--groups)
+    (if (setq completionist--lock-groups (not (eq n 0)))
+        (setq completionist--groups (completionist--cycle completionist--groups
+                                                          (let ((len (length completionist--groups)))
+                                                            (- len (mod (- (or n 1)) len))))
+              completionist--all-groups (completionist--cycle completionist--all-groups
+                                                              (seq-position completionist--all-groups
+                                                                            (car completionist--groups))))
+      (setq completionist--groups nil
+            completionist--all-groups nil))
+    (setq completionist--lock-candidate nil
+          completionist--input nil)))
+
+(defun completionist-previous-group (&optional n)
+  "Cycle N groups backward.
+When the prefix argument is 0, the group order is reset."
+  (interactive "p")
+  (completionist-next-group (- (or n 1))))
+
+(defcustom completionist-resize resize-mini-windows
+  "How to resize the Completionist window, see `resize-mini-windows'."
+  :type '(choice (const :tag "Fixed" nil)
+                 (const :tag "Shrink and grow" t)
+                 (const :tag "Grow-only" grow-only))
+  :group 'completionist)
+
+(defun completionist--resize-window (height)
+  "Resize completionist window to HEIGHT."
+  (setq-local truncate-lines (< (point) (* 0.8 (completionist--window-width))))
+  (when-let ((win (get-buffer-window (current-buffer))))
+    (unless (or (window-minibuffer-p win) (frame-root-window-p win))
+      (unless completionist-resize
+        (setq height (max height completionist-count)))
+      (let* ((window-resize-pixelwise t)
+             (dp (- (max (cdr (window-text-pixel-size))
+                         (* (default-line-height) (1+ height)))
+                    (window-pixel-height win))))
+        (when (or (and (> dp 0) (/= height 0))
+                  (and (< dp 0) (eq completionist-resize t)))
+          (with-selected-window win
+            (window-resize nil dp nil nil 'pixelwise)))))))
+
+(defun completionist-first ()
+  "Go to first candidate, or to the prompt when the first candidate is selected."
+  (interactive)
+  (completionist--goto (if (> completionist--index 0) 0 -1)))
+
+(defun completionist-last ()
+  "Go to last candidate."
+  (interactive)
+  (completionist--goto (1- completionist--total)))
+
+(defun completionist-scroll-down (&optional n)
+  "Go back by N pages."
+  (interactive "p")
+  (completionist--goto (max 0 (- completionist--index (* (or n 1) completionist-count)))))
+
+(defun completionist-scroll-up (&optional n)
+  "Go forward by N pages."
+  (interactive "p")
+  (completionist-scroll-down (- (or n 1))))
 
 (provide 'completionist-lib)
 ;;; completionist-lib.el ends here

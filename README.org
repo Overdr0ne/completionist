@@ -206,10 +206,29 @@ Each widget can have its own independent sort function and history via the ~SORT
 :custom_id: extensions
 :end:
 
-Extensions provide alternative display layouts. They are activated *per-buffer* via the ~display-mode~ parameter — never as global modes. Both are loaded automatically by ~completionist.el~.
+Extensions modify the display or navigation of a completionist buffer. They are activated *per-buffer* via the ~display-mode~ parameter (or automatically) — never as global modes. All extensions are loaded automatically by ~completionist.el~.
 
-- [[file:extensions/completionist-flat.el][completionist-flat]]: Horizontal layout (~'flat~)
-- [[file:extensions/completionist-grid.el][completionist-grid]]: Grid/column layout (~'grid~)
+** Display layouts
+
+- [[file:extensions/completionist-flat.el][completionist-flat]]: Horizontal one-line layout (~'flat~)
+- [[file:extensions/completionist-grid.el][completionist-grid]]: Multi-column grid layout (~'grid~)
+- [[file:extensions/completionist-reverse.el][completionist-reverse]]: Reversed (bottom-up) vertical layout (~'reverse~)
+
+** Candidate selection
+
+- [[file:extensions/completionist-indexed.el][completionist-indexed]]: Numeric-prefix candidate selection (~'indexed~); use ~C-N RET~ or ~C-N TAB~ to select by number
+- [[file:extensions/completionist-quick.el][completionist-quick]]: Avy-style quick-key jumping; bind ~completionist-quick-jump~, ~completionist-quick-exit~, or ~completionist-quick-insert~ to keys in ~completionist-map~
+
+** Mouse support
+
+- [[file:extensions/completionist-mouse.el][completionist-mouse]]: Mouse click and scroll-wheel support, activated automatically for every completionist buffer — no configuration required
+
+** Not applicable to persistent buffers
+
+The following extensions are inherited from Vertico and only work with ~completing-read~ / minibuffer sessions. They are not loaded by ~completionist.el~:
+
+- =completionist-multiform=: Per-command display mode switching (use the ~DISPLAY-MODE~ parameter instead)
+- =completionist-directory=: Ido-like file path navigation (implement file navigation in your widget's collector/handler)
 
 * Complementary Packages
 
@@ -228,7 +247,11 @@ Completionist is designed to be loaded as a local package:
   :straight (completionist :local-repo "path/to/completionist"
                            :files ("*.el"
                                    "extensions/completionist-flat.el"
-                                   "extensions/completionist-grid.el")))
+                                   "extensions/completionist-grid.el"
+                                   "extensions/completionist-reverse.el"
+                                   "extensions/completionist-indexed.el"
+                                   "extensions/completionist-mouse.el"
+                                   "extensions/completionist-quick.el")))
 #+end_src
 
 * Contributions

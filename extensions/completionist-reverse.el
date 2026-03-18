@@ -1,4 +1,4 @@
-;;; completionist-reverse.el --- Reverse the Vertico display -*- lexical-binding: t -*-
+;;; completionist-reverse.el --- Reverse display for Completionist -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2021, 2022  Free Software Foundation, Inc.
 
@@ -6,7 +6,7 @@
 ;; Maintainer: Daniel Mendler <mail@daniel-mendler.de>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Package-Requires: ((emacs "27.1") (completionist-lib "0.28"))
 ;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
@@ -26,17 +26,17 @@
 
 ;;; Commentary:
 
-;; This package is a Vertico extension, which reverses the list of candidates.
+;; Provides reversed (bottom-up) candidate display for Completionist persistent buffers.
+;; Activated per-buffer via the display-mode parameter of `completionist--complete':
 ;;
-;; The mode can be enabled globally or via `completionist-multiform-mode' per
-;; command or completion category. Alternatively the reverse display can be
-;; toggled temporarily if `completionist-multiform-mode' is enabled:
+;;   (completionist--complete "prompt:" collector handler "*buf*" action nil 'reverse)
 ;;
-;; (define-key completionist-map "\M-R" #'completionist-multiform-reverse)
+;; Navigation keys are swapped so up/down still feel natural relative to
+;; the direction candidates grow on screen.
 
 ;;; Code:
 
-(require 'completionist)
+(require 'completionist-lib)
 
 (defvar completionist-reverse-map
   (let ((map (make-sparse-keymap)))
@@ -52,10 +52,10 @@
     (define-key map [remap backward-paragraph] #'completionist-next-group)
     (define-key map [remap forward-paragraph] #'completionist-previous-group)
     map)
-  "Additional keymap activated in reverse mode.")
+  "Keymap for reverse display mode, swapping navigation directions.")
 
 (defun completionist-reverse--display-candidates (lines)
-  "Display LINES in reverse."
+  "Display LINES in reverse order (bottom-up)."
   (move-overlay completionist--candidates-ov (point-min) (point-min))
   (setq lines (nreverse lines))
   (unless (eq completionist-resize t)
@@ -65,22 +65,6 @@
     (overlay-put completionist--candidates-ov 'before-string string)
     (overlay-put completionist--candidates-ov 'after-string nil))
   (completionist--resize-window (length lines)))
-
-;;;###autoload
-(define-minor-mode completionist-reverse-mode
-  "Reverse the Vertico display."
-  :global t :group 'completionist
-  ;; Reset overlays
-  (dolist (buf (buffer-list))
-    (when-let (ov (buffer-local-value 'completionist--candidates-ov buf))
-      (overlay-put ov 'before-string nil)))
-  (cond
-   (completionist-reverse-mode
-    (add-to-list 'minor-mode-map-alist `(completionist--input . ,completionist-reverse-map))
-    (advice-add #'completionist--display-candidates :override #'completionist-reverse--display-candidates))
-   (t
-    (setq minor-mode-map-alist (delete `(completionist--input . ,completionist-reverse-map) minor-mode-map-alist))
-    (advice-remove #'completionist--display-candidates #'completionist-reverse--display-candidates))))
 
 (provide 'completionist-reverse)
 ;;; completionist-reverse.el ends here

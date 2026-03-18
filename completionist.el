@@ -36,6 +36,10 @@
 (require 'completionist-lib)
 (require 'completionist-flat)
 (require 'completionist-grid)
+(require 'completionist-mouse)
+(require 'completionist-quick)
+(require 'completionist-reverse)
+(require 'completionist-indexed)
 (eval-when-compile
   (require 'cl-lib)
   (require 'subr-x))
@@ -64,11 +68,6 @@
 The value should lie between 0 and completionist-count/2."
   :type 'integer)
 
-(defcustom completionist-resize resize-mini-windows
-  "How to resize the Completionist minibuffer window, see `resize-mini-windows'."
-  :type '(choice (const :tag "Fixed" nil)
-                 (const :tag "Shrink and grow" t)
-                 (const :tag "Grow-only" grow-only)))
 
 (defcustom completionist-sort-function #'completionist-sort-history-length-alpha
   "Default sorting function, used if no `display-sort-function' is specified."
@@ -127,17 +126,7 @@ The value should lie between 0 and completionist-count/2."
 (defvar-local completionist--metadata nil
   "Completion metadata.")
 
-(defvar-local completionist--base ""
-  "Base string, which is concatenated with the candidate.")
 
-(defvar-local completionist--lock-groups nil
-  "Lock-in current group order.")
-
-(defvar-local completionist--all-groups nil
-  "List of all group titles.")
-
-(defvar-local completionist--groups nil
-  "List of current group titles.")
 
 (defvar-local completionist--table nil)
 
@@ -147,13 +136,6 @@ The value should lie between 0 and completionist-count/2."
 
 (defvar-local completionist--handler nil)
 
-(defvar-local completionist--arrange-fn nil
-  "Buffer-local function to arrange candidates.
-If nil, use default `completionist--arrange-candidates-default'.")
-
-(defvar-local completionist--display-fn nil
-  "Buffer-local function to display candidates.
-If nil, use default `completionist--display-candidates-default'.")
 
 (defvar-local completionist--sort-fn nil
   "Buffer-local sorting function for this widget.
@@ -171,11 +153,6 @@ If nil, use `completionist-sort-function'.")
 (defun completionist-prompt-end ()
   1)
 
-(defun completionist-contents-no-properties ()
-  "Get buffer contents, excluding the invisible separator space."
-  (with-current-buffer completionist--buffer
-    ;; Exclude the last character (invisible separator space)
-    (buffer-substring-no-properties (point-min) (max (point-min) (1- (point-max))))))
 
 (defun completionist--history-hash ()
   "Recompute history hash table and return it."
@@ -379,9 +356,6 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
                                                 ))
                                        -1 0))))))
 
-(defun completionist--cycle (list n)
-  "Rotate LIST to position N."
-  (nconc (copy-sequence (nthcdr n list)) (seq-take list n)))
 
 (defun completionist--group-by (fun elems)
   "Group ELEMS by FUN."
@@ -519,7 +493,10 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
                   (setq start (or start index))
                   (when (string-match-p "\n" cand)
                     (setq cand (completionist--truncate-multiline cand max-width)))
-                  (setcar line (completionist--format-candidate cand prefix suffix index start))))))
+                  (setcar line (if completionist--format-fn
+                                   (funcall completionist--format-fn
+                                            #'completionist--format-candidate cand prefix suffix index start)
+                                 (completionist--format-candidate cand prefix suffix index start)))))))
     lines))
 
 (defun completionist--arrange-candidates ()
@@ -539,22 +516,6 @@ The function is configured by BY, BSIZE, BINDEX, BPRED and PRED."
   "Display candidates using buffer-local or default function."
   (funcall (or completionist--display-fn #'completionist--display-candidates-default) lines))
 
-(defun completionist--resize-window (height)
-  "Resize completionist window to HEIGHT.
-For persistent buffers, this adjusts the window height."
-  (setq-local truncate-lines (< (point) (* 0.8 (completionist--window-width))))
-  (when-let ((win (get-buffer-window (current-buffer))))
-    (unless (or (window-minibuffer-p win) (frame-root-window-p win))
-      (unless completionist-resize
-        (setq height (max height completionist-count)))
-      (let* ((window-resize-pixelwise t)
-             (dp (- (max (cdr (window-text-pixel-size))
-                         (* (default-line-height) (1+ height)))
-                    (window-pixel-height win))))
-        (when (or (and (> dp 0) (/= height 0))
-                  (and (< dp 0) (eq completionist-resize t)))
-          (with-selected-window win
-            (window-resize nil dp nil nil 'pixelwise)))))))
 
 (defun completionist--format-count ()
   "Format the count string."
@@ -588,13 +549,6 @@ For persistent buffers, this adjusts the window height."
         (add-face-text-property (completionist-prompt-end) (point-max) 'completionist-current 'append)
       (completionist--remove-face (completionist-prompt-end) (point-max) 'completionist-current))))
 
-(defun completionist--remove-face (beg end face &optional obj)
-  "Remove FACE between BEG and END from OBJ."
-  (while (< beg end)
-    (let ((next (next-single-property-change beg 'face obj end)))
-      (when-let (val (get-text-property beg 'face obj))
-        (put-text-property beg next 'face (remq face (if (listp val) val (list val))) obj))
-      (setq beg next))))
 
 (defun completionist--exhibit (buf &optional no-redisplay)
   "Exhibit completion UI.
@@ -615,25 +569,6 @@ If NO-REDISPLAY is non-nil, skip the redisplay call (for background updates)."
           ;; The separator space is at (point-max), user input ends at (1- (point-max))
           (goto-char (1- (point-max))))))))
 
-(defun completionist-first ()
-  "Go to first candidate, or to the prompt when the first candidate is selected."
-  (interactive)
-  (completionist--goto (if (> completionist--index 0) 0 -1)))
-
-(defun completionist-last ()
-  "Go to last candidate."
-  (interactive)
-  (completionist--goto (1- completionist--total)))
-
-(defun completionist-scroll-down (&optional n)
-  "Go back by N pages."
-  (interactive "p")
-  (completionist--goto (max 0 (- completionist--index (* (or n 1) completionist-count)))))
-
-(defun completionist-scroll-up (&optional n)
-  "Go forward by N pages."
-  (interactive "p")
-  (completionist-scroll-down (- (or n 1))))
 
 (defun completionist--match-p (input)
   "Return t if INPUT is a valid match."
@@ -652,28 +587,6 @@ If NO-REDISPLAY is non-nil, skip the redisplay call (for background updates)."
   (when (completionist--match-p (completionist-contents-no-properties))
     (exit-minibuffer)))
 
-(defun completionist-next-group (&optional n)
-  "Cycle N groups forward.
-When the prefix argument is 0, the group order is reset."
-  (interactive "p")
-  (when (cdr completionist--groups)
-    (if (setq completionist--lock-groups (not (eq n 0)))
-        (setq completionist--groups (completionist--cycle completionist--groups
-                                                          (let ((len (length completionist--groups)))
-                                                            (- len (mod (- (or n 1)) len))))
-              completionist--all-groups (completionist--cycle completionist--all-groups
-                                                              (seq-position completionist--all-groups
-                                                                            (car completionist--groups))))
-      (setq completionist--groups nil
-            completionist--all-groups nil))
-    (setq completionist--lock-candidate nil
-          completionist--input nil)))
-
-(defun completionist-previous-group (&optional n)
-  "Cycle N groups backward.
-When the prefix argument is 0, the group order is reset."
-  (interactive "p")
-  (completionist-next-group (- (or n 1))))
 
 (defun completionist-exit-input ()
   "Exit minibuffer with input."
@@ -687,21 +600,6 @@ When the prefix argument is 0, the group order is reset."
       (call-interactively #'kill-ring-save)
     (kill-new (completionist--candidate))))
 
-(defun completionist-insert ()
-  "Insert current candidate in minibuffer."
-  (interactive)
-  ;; XXX There is a small bug here, depending on interpretation. When completing
-  ;; "~/emacs/master/li|/calc" where "|" is the cursor, then the returned
-  ;; candidate only includes the prefix "~/emacs/master/lisp/", but not the
-  ;; suffix "/calc". Default completion has the same problem when selecting in
-  ;; the *Completions* buffer. See bug#48356.
-  (when (> completionist--total 0)
-    (let ((completionist--index (max 0 completionist--index))
-          (inhibit-read-only t))
-      ;; Delete user input but preserve separator space at end
-      (delete-region (point-min) (max (point-min) (1- (point-max))))
-      (insert (completionist--candidate)))
-    (completionist-contents-no-properties)))
 
 (defun completionist-execute ()
   "Execute with current candidate."
@@ -722,20 +620,6 @@ When the prefix argument is 0, the group order is reset."
       (completionist--exhibit buf)
       )
     ))
-(defun completionist--candidate (&optional hl)
-  "Return current candidate string with optional highlighting if HL is non-nil."
-  (let ((content (substring (or (car-safe completionist--input) (completionist-contents-no-properties)))))
-    (cond
-     ((>= completionist--index 0)
-      (let ((cand (substring (nth completionist--index completionist--candidates))))
-        ;; XXX Drop the completions-common-part face which is added by `completion--twq-all'.
-        ;; This is a hack in Emacs and should better be fixed in Emacs itself, the corresponding
-        ;; code is already marked with a FIXME. Should this be reported as a bug?
-        (completionist--remove-face 0 (length cand) 'completions-common-part cand)
-        (concat completionist--base
-                (if hl (car (funcall completionist--highlight (list cand))) cand))))
-     ((and (equal content "") (or (car-safe minibuffer-default) minibuffer-default)))
-     (t content))))
 
 (defun completionist--protect-separator (beg end)
   "Prevent deletion or modification of the invisible separator space.
@@ -796,6 +680,9 @@ DISPLAY-MODE can be:
   (overlay-put completionist--candidates-ov 'priority 0)
   (setq-local completion-auto-help nil
               completion-show-inline-help nil)
+  ;; Always activate mouse support: scroll wheel + click-to-select/insert
+  (completionist-mouse--setup)
+  (setq-local completionist--format-fn #'completionist-mouse--format-candidate)
   ;; Set display mode and activate any extension-specific keymap
   (pcase display-mode
     ('flat
@@ -805,6 +692,13 @@ DISPLAY-MODE can be:
     ('grid
      (setq-local completionist--arrange-fn #'completionist-grid--arrange-candidates)
      (use-local-map (make-composed-keymap completionist-grid-map completionist-map)))
+    ('reverse
+     (setq-local completionist--display-fn #'completionist-reverse--display-candidates)
+     (use-local-map (make-composed-keymap completionist-reverse-map completionist-map)))
+    ('indexed
+     (setq-local completionist-indexed--active t
+                 completionist--format-fn #'completionist-indexed--format-candidate)
+     (use-local-map completionist-map))
     ((pred consp)
      (setq-local completionist--arrange-fn (car display-mode)
                  completionist--display-fn (cdr display-mode))

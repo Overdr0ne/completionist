@@ -36,7 +36,8 @@
 
 ;;; Code:
 
-(require 'completionist)
+(require 'completionist-lib)
+(require 'completionist-flat)
 (eval-when-compile
   (require 'cl-lib)
   (require 'subr-x))
@@ -108,13 +109,13 @@ TWO is non-nil if two keys should be displayed."
               (lambda (cand prefix suffix index start)
                 (pcase-let ((`(,keys . ,events) (completionist-quick--keys first index start)))
                   (setq list (nconc events list))
-                  (if (bound-and-true-p completionist-flat-mode)
+                  (if (eq completionist--arrange-fn #'completionist-flat--arrange-candidates)
                       (setq keys (replace-regexp-in-string " " "" keys)
                             cand (string-trim cand)
                             cand (substring cand (min (length cand) (length keys))))
                     (setq keys (concat keys (make-string (max 1 (- (length prefix) 2)) ?\s))))
                   (funcall orig cand keys suffix index start)))))
-    (completionist--exhibit)
+    (completionist--exhibit (current-buffer))
     (alist-get (read-key) list)))
 
 ;;;###autoload
@@ -129,10 +130,10 @@ TWO is non-nil if two keys should be displayed."
 
 ;;;###autoload
 (defun completionist-quick-exit ()
-  "Exit with candidate using quick keys."
+  "Execute handler with candidate selected by quick keys."
   (interactive)
   (when (completionist-quick-jump)
-    (completionist-exit)))
+    (completionist-execute)))
 
 ;;;###autoload
 (defun completionist-quick-insert ()
