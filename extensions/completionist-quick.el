@@ -6,7 +6,7 @@
 ;; Maintainer: Overdr0ne <scmorris.dev@gmail.com>
 ;; Created: 2021
 ;; Version: 0.1
-;; Package-Requires: ((emacs "27.1") (completionist "0.28"))
+;; Package-Requires: ((emacs "27.1") (completionist-lib "0.28"))
 ;; Homepage: https://github.com/minad/completionist
 
 ;; This file is part of GNU Emacs.
