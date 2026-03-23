@@ -26,8 +26,25 @@
 
 (require 'perspective)
 (require 'completionist)
+(require 'completionist-lib)
 (require 'completionist-grid)
 (require 'completionist-flat)
+
+(defun completionist-persp--sync-history ()
+  "Push the current perspective into the persp widget's history.
+Called via `persp-switch-hook' so external perspective switches
+(keybindings, mouse, etc.) are reflected in the widget's sort order."
+  (when-let ((buf (get-buffer " *persps*"))
+             (name (persp-current-name)))
+    (with-current-buffer buf
+      (setq completionist--history
+            (cons name (delete name completionist--history)))
+      (setq completionist--history-hash nil))
+    ;; Exhibit synchronously so the sort update lands before the post-command
+    ;; display cycle, giving immediate visual feedback with no stale frame.
+    (completionist--exhibit buf t)))
+
+(add-hook 'persp-switch-hook #'completionist-persp--sync-history)
 
 (defun completionist-persp-switch ()
   "Show a focused perspective switcher as a flat tab bar at the top of the frame.
@@ -43,7 +60,7 @@ Auto-updates when perspectives are created, killed, or renamed."
     (completionist--complete "persp:" #'persp-names #'persp-switch " *persps*" action
                              nil    ; unfocusp
                              'flat  ; display-mode - horizontal flat layout for tab bar
-                             '(persp-created-hook persp-killed-hook persp-renamed-hook)
+                             '(persp-created-hook persp-killed-hook persp-renamed-hook persp-switch-hook)
                              nil    ; update-interval
                              nil    ; history
                              nil))) ; sort-fn
