@@ -911,24 +911,23 @@ UPDATE-INTERVAL is seconds between updates, or nil for no timer."
     (completionist--cleanup-updates)
 
     ;; Setup hook-based updates
-    ;; Use idle timer to defer updates and prevent rapid firing during commands
+    ;; Debounce with a 0-delay regular timer so the exhibit runs after the
+    ;; current command completes (and thus after all hook side-effects such as
+    ;; history updates), but without requiring Emacs to be idle.  Rapid-firing
+    ;; hooks cancel and reschedule the timer so only one exhibit runs.
     (when update-hooks
       (dolist (hook update-hooks)
         (let ((update-fn (lambda ()
-                          ;; Schedule update for when Emacs is idle
                           (when (buffer-live-p buffer)
                             (with-current-buffer buffer
-                              ;; Cancel existing idle timer if any
                               (when completionist--update-idle-timer
                                 (cancel-timer completionist--update-idle-timer))
-                              ;; Schedule new idle update after 0.3 seconds
                               (setq completionist--update-idle-timer
-                                    (run-with-idle-timer 0.3 nil
-                                                        (lambda ()
-                                                          (when (and (buffer-live-p buffer)
-                                                                     (not (minibufferp)))
-                                                            ;; Pass t to skip redisplay for background updates
-                                                            (completionist--exhibit buffer t))))))))))
+                                    (run-with-timer 0 nil
+                                                    (lambda ()
+                                                      (when (buffer-live-p buffer)
+                                                        (completionist--exhibit buffer t)
+                                                        (redisplay))))))))))
           (add-hook hook update-fn)
           ;; Store removal function
           (push (lambda () (remove-hook hook update-fn))
